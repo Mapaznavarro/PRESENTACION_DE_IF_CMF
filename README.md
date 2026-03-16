@@ -53,5 +53,8 @@ Los PDFs quedarán en la carpeta `normativa/pdfs/`. También puedes descargarlos
 ## Fuentes oficiales
 
 - [CMF – Normativa para AGF](https://www.cmfchile.cl/institucional/legislacion_normativa/normativa2.php?hidden_mercado=V&entidad_web=RGAGF)
+- [CMF – Normativa para FFMM](https://www.cmfchile.cl/institucional/legislacion_normativa/normativa2.php?hidden_mercado=V&entidad_web=RGFMU)
+- [CMF – Normativa para FFII](https://www.cmfchile.cl/institucional/legislacion_normativa/normativa2.php?hidden_mercado=V&entidad_web=RGFIN)
+
 - [Biblioteca del Congreso Nacional – Ley 20.712](https://www.leychile.cl/leychile/Navegar?idNorma=1057895)
 - [CMF – Portal institucional](https://www.cmfchile.cl)
