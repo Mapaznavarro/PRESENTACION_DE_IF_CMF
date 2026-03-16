@@ -19,7 +19,7 @@ Nivel de riesgo que el directorio de una AGF está dispuesto a asumir en el desa
 Ver *Partícipe*.
 
 **Auditor externo**
-Firma de auditoría independiente inscrita en el Registro de Auditores Externos de la CMF, encargada de emitir un dictamen sobre los estados financieros anuales de los fondos (NCG N° 435).
+Firma de auditoría independiente inscrita en el Registro de Auditores Externos de la CMF, encargada de emitir un dictamen sobre los estados financieros anuales de los fondos (obligación establecida en la Ley N° 20.712).
 
 ---
 
@@ -87,7 +87,7 @@ Conjunto de políticas, estructuras, procedimientos y prácticas mediante los cu
 ## I
 
 **IFRS (International Financial Reporting Standards)**
-Normas Internacionales de Información Financiera emitidas por el IASB (International Accounting Standards Board), adoptadas en Chile para la preparación de los estados financieros de los fondos fiscalizados (NCG N° 435). También conocidas como NIIF en español.
+Normas Internacionales de Información Financiera emitidas por el IASB (International Accounting Standards Board), adoptadas en Chile para la preparación de los estados financieros de los fondos fiscalizados por la CMF. También conocidas como NIIF en español.
 
 ---
 

@@ -14,30 +14,41 @@ El marco normativo que regula a las AGF en Chile se estructura en torno a:
 2. **Normas de Carácter General (NCG)** emitidas por la CMF que desarrollan los requisitos específicos.
 3. **Circulares** con instrucciones operativas particulares.
 
+## Cómo descargar los PDFs oficiales
+
+Cada documento normativo tiene su PDF oficial publicado por la CMF. Para descargarlos todos localmente:
+
+```bash
+bash descargar_normativa.sh
+```
+
+Los PDFs quedarán en la carpeta `normativa/pdfs/`. También puedes descargarlos individualmente desde los enlaces en cada documento o desde el [índice de PDFs](normativa/pdfs/README.md).
+
 ## Índice de documentos
 
 ### Leyes
 
-| Documento | Descripción |
-|-----------|-------------|
-| [Ley N° 20.712](normativa/leyes/ley_20712.md) | Ley Única de Fondos – marco principal de las AGF |
+| Documento | Descripción | PDF oficial |
+|-----------|-------------|-------------|
+| [Ley N° 20.712](normativa/leyes/ley_20712.md) | Ley Única de Fondos – marco principal de las AGF | [CMF ↗](https://www.cmfchile.cl/portal/principal/613/articles-15739_doc_pdf.pdf) |
 
 ### Normas de Carácter General (NCG)
 
-| Documento | Descripción |
-|-----------|-------------|
-| [NCG N° 365](normativa/ncg/ncg_365.md) | Información sobre reglamentos internos de fondos |
-| [NCG N° 435](normativa/ncg/ncg_435.md) | Presentación de estados financieros bajo IFRS |
-| [NCG N° 507](normativa/ncg/ncg_507.md) | Gobierno corporativo y gestión de riesgos (base) |
-| [NCG N° 526](normativa/ncg/ncg_526.md) | Patrimonio mínimo y garantías de las AGF (2024) |
-| [NCG N° 527](normativa/ncg/ncg_527.md) | Gobierno corporativo y gestión integral de riesgos (2024) |
-| [NCG N° 532](normativa/ncg/ncg_532.md) | Manual de Sistema de Información de Fondos – MSI (2025) |
+| Documento | Descripción | PDF oficial |
+|-----------|-------------|-------------|
+| [NCG N° 365](normativa/ncg/ncg_365.md) | Información sobre reglamentos internos de fondos | [CMF ↗](https://www.cmfchile.cl/institucional/mercados/ver_archivo.php?archivo=/web/compendio/ncg/ncg_365_2014.pdf) |
+| [NCG N° 435](normativa/ncg/ncg_435.md) | Participación y votación a distancia en asambleas de aportantes | [CMF ↗](https://www.cmfchile.cl/normativa/ncg_435_2020.pdf) |
+| [NCG N° 507](normativa/ncg/ncg_507.md) | Gobierno corporativo y gestión de riesgos (base) | [CMF ↗](https://www.cmfchile.cl/institucional/mercados/ver_archivo.php?archivo=/web/compendio/ncg/ncg_507_2024.pdf) |
+| [NCG N° 526](normativa/ncg/ncg_526.md) | Patrimonio mínimo y garantías de las AGF (2024) | [CMF ↗](https://www.cmfchile.cl/normativa/ncg_526_2024.pdf) |
+| [NCG N° 527](normativa/ncg/ncg_527.md) | Gobierno corporativo y gestión integral de riesgos (2024) | [CMF ↗](https://www.cmfchile.cl/normativa/ncg_527_2024.pdf) |
+| [NCG N° 532](normativa/ncg/ncg_532.md) | Manual de Sistema de Información de Fondos – MSI (2025) | [CMF ↗](https://www.cmfchile.cl/normativa/ncg_532_2025.pdf) |
 
 ### Contexto y glosario
 
 | Documento | Descripción |
 |-----------|-------------|
 | [Glosario](normativa/contexto/glosario.md) | Definiciones clave del sector AGF en Chile |
+| [Índice de PDFs](normativa/pdfs/README.md) | Lista completa de PDFs y cómo descargarlos |
 
 ## Fuentes oficiales
 
