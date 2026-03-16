@@ -43,6 +43,13 @@ Los PDFs quedarán en la carpeta `normativa/pdfs/`. También puedes descargarlos
 | [NCG N° 527](normativa/ncg/ncg_527.md) | Gobierno corporativo y gestión integral de riesgos (2024) | [CMF ↗](https://www.cmfchile.cl/normativa/ncg_527_2024.pdf) |
 | [NCG N° 532](normativa/ncg/ncg_532.md) | Manual de Sistema de Información de Fondos – MSI (2025) | [CMF ↗](https://www.cmfchile.cl/normativa/ncg_532_2025.pdf) |
 
+### Circulares
+
+| Documento | Descripción | PDF oficial |
+|-----------|-------------|-------------|
+| Circular N° 1997 | Instrucciones operativas CMF – Circular 1997 | [CMF ↗](https://www.cmfchile.cl/normativa/circular_1997.pdf) |
+| Circular N° 1998 | Instrucciones operativas CMF – Circular 1998 | [CMF ↗](https://www.cmfchile.cl/normativa/circular_1998.pdf) |
+
 ### Contexto y glosario
 
 | Documento | Descripción |
