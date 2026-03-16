@@ -47,8 +47,8 @@ Los PDFs quedarán en la carpeta `normativa/pdfs/`. También puedes descargarlos
 
 | Documento | Descripción | PDF oficial |
 |-----------|-------------|-------------|
-| Circular N° 1997 | Instrucciones operativas CMF – Circular 1997 | [CMF ↗](https://www.cmfchile.cl/normativa/circular_1997.pdf) |
-| Circular N° 1998 | Instrucciones operativas CMF – Circular 1998 | [CMF ↗](https://www.cmfchile.cl/normativa/circular_1998.pdf) |
+| Circular N° 1997 | Instrucciones operativas CMF – Circular 1997 | [CMF ↗](https://www.cmfchile.cl/normativa/cir_1997_2010.pdf) |
+| Circular N° 1998 | Instrucciones operativas CMF – Circular 1998 | [CMF ↗](https://www.cmfchile.cl/normativa/cir_1998_2010.pdf) |
 
 ### Contexto y glosario
 
