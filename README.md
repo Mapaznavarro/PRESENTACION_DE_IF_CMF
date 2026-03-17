@@ -14,6 +14,26 @@ El marco normativo que regula a las AGF en Chile se estructura en torno a:
 2. **Normas de Carácter General (NCG)** emitidas por la CMF que desarrollan los requisitos específicos.
 3. **Circulares** con instrucciones operativas particulares.
 
+## Análisis normativo
+
+El repositorio incluye el script `analizar.py` que genera un reporte de análisis sobre el marco regulatorio: documentos disponibles, archivos requeridos por cada Circular, estado de los planes QA y un checklist de cumplimiento para AGF.
+
+```bash
+# Reporte completo (todas las secciones)
+python analizar.py
+
+# Solo Circular N° 1997 (Fondos Mutuos)
+python analizar.py --circular 1997
+
+# Solo Circular N° 1998 (Fondos de Inversión)
+python analizar.py --circular 1998
+
+# Exportar el reporte a un archivo
+python analizar.py --salida reporte.md
+```
+
+Requisitos: Python 3.10 o superior (sin dependencias externas).
+
 ## Cómo descargar los PDFs oficiales
 
 Cada documento normativo tiene su PDF oficial publicado por la CMF. Para descargarlos todos localmente:
