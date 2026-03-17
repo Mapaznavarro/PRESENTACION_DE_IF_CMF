@@ -84,6 +84,17 @@ Los PDFs quedarán en la carpeta `normativa/pdfs/`. También puedes descargarlos
 | [Glosario](normativa/contexto/glosario.md) | Definiciones clave del sector AGF en Chile |
 | [Índice de PDFs](normativa/pdfs/README.md) | Lista completa de PDFs y cómo descargarlos |
 
+## Sobre el agente de Copilot
+
+Si ves la pantalla **"Setting up environment"** con líneas como
+`Start 'playwright' MCP server` o `Start 'github-mcp-server' MCP server` al
+asignarle una tarea al agente de GitHub Copilot, consulta la explicación detallada
+en:
+
+📄 [docs/agente-copilot.md](docs/agente-copilot.md)
+
+---
+
 ## Fuentes oficiales
 
 - [CMF – Normativa para AGF](https://www.cmfchile.cl/institucional/legislacion_normativa/normativa2.php?hidden_mercado=V&entidad_web=RGAGF)
