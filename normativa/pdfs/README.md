@@ -23,6 +23,8 @@ El script descargará automáticamente todos los archivos en esta carpeta.
 | `ncg_526.pdf` | NCG N° 526 – Patrimonio mínimo y garantías (2024) | [CMF](https://www.cmfchile.cl/normativa/ncg_526_2024.pdf) |
 | `ncg_527.pdf` | NCG N° 527 – Gobierno corporativo y gestión integral de riesgos (2024) | [CMF](https://www.cmfchile.cl/normativa/ncg_527_2024.pdf) |
 | `ncg_532.pdf` | NCG N° 532 – Manual de Sistema de Información de Fondos (2025) | [CMF](https://www.cmfchile.cl/normativa/ncg_532_2025.pdf) |
+| `cir_1997_2010.pdf` | Circular N° 1997 – IFRS para fondos mutuos (2010) | [CMF](https://www.cmfchile.cl/normativa/cir_1997_2010.pdf) |
+| `cir_1998_2010.pdf` | Circular N° 1998 – IFRS para fondos de inversión (2010) | [CMF](https://www.cmfchile.cl/normativa/cir_1998_2010.pdf) |
 
 ## Por qué los PDFs no están en el repositorio
 

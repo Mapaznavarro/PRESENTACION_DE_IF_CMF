@@ -47,8 +47,15 @@ Los PDFs quedarán en la carpeta `normativa/pdfs/`. También puedes descargarlos
 
 | Documento | Descripción | PDF oficial |
 |-----------|-------------|-------------|
-| Circular N° 1997 | Instrucciones operativas CMF – Circular 1997 | [CMF ↗](https://www.cmfchile.cl/normativa/cir_1997_2010.pdf) |
-| Circular N° 1998 | Instrucciones operativas CMF – Circular 1998 | [CMF ↗](https://www.cmfchile.cl/normativa/cir_1998_2010.pdf) |
+| [Circular N° 1997](normativa/circulares/cir_1997.md) | Presentación de información financiera bajo IFRS para fondos mutuos | [CMF ↗](https://www.cmfchile.cl/normativa/cir_1997_2010.pdf) |
+| [Circular N° 1998](normativa/circulares/cir_1998.md) | Presentación de información financiera bajo IFRS para fondos de inversión | [CMF ↗](https://www.cmfchile.cl/normativa/cir_1998_2010.pdf) |
+
+### Planes de prueba QA – Circulares
+
+| Documento | Descripción |
+|-----------|-------------|
+| [QA – Circular N° 1997](normativa/circulares/qa_cir_1997.md) | Casos de prueba para validar los archivos generados según Circular 1997 (Fondos Mutuos) |
+| [QA – Circular N° 1998](normativa/circulares/qa_cir_1998.md) | Casos de prueba para validar los archivos generados según Circular 1998 (Fondos de Inversión) |
 
 ### Contexto y glosario
 
