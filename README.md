@@ -46,17 +46,23 @@ Los PDFs quedarán en la carpeta `normativa/pdfs/`. También puedes descargarlos
 
 ## Reglamentos internos de fondos BCI Asset Management
 
-La carpeta [`reglamentos_bci/`](reglamentos_bci/) contiene un script Python y un
-índice de los **reglamentos internos** de los fondos de
+La carpeta [`reglamentos_bci/`](reglamentos_bci/) contiene los **reglamentos internos** de los fondos de
 BCI Asset Management Administradora General de Fondos S.A. registrados en la CMF.
+
+Los pasos son los mismos que para la normativa: ejecuta el script desde la raíz del repositorio.
 
 ```bash
 # Generar el índice y descargar los PDFs de reglamentos
-cd reglamentos_bci
-python descargar_reglamentos_bci.py
+bash descargar_reglamentos_bci.sh
 
 # Solo generar el índice sin descargar PDFs
-python descargar_reglamentos_bci.py --solo-indice
+bash descargar_reglamentos_bci.sh --solo-indice
+
+# Solo Fondos Mutuos
+bash descargar_reglamentos_bci.sh --tipo FM
+
+# Solo Fondos de Inversión
+bash descargar_reglamentos_bci.sh --tipo FI
 ```
 
 Los resultados quedan en `reglamentos_bci/fondos_bci.csv`, `reglamentos_bci/fondos_bci.md`
