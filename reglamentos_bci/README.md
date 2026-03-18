@@ -75,9 +75,11 @@ Si prefieres consultar directamente sin ejecutar el script:
 
 | Recurso | URL |
 |---------|-----|
-| Buscador de Fondos Mutuos | <https://www.cmfchile.cl/institucional/mercados/fondos_mutuos.php> |
-| Buscador de Fondos de Inversión | <https://www.cmfchile.cl/institucional/mercados/fondos_inversion.php> |
-| Listado de AGF registradas | <https://www.cmfchile.cl/institucional/mercados/agf.php> |
+| Listado de Fondos Mutuos | <https://www.cmfchile.cl/institucional/mercados/consulta.php?mercado=V&entidad=RGFMU> |
+| Listado de Fondos de Inversión | <https://www.cmfchile.cl/institucional/mercados/consulta.php?mercado=V&entidad=RGFI> |
+| Reglamentos Internos – FM | <https://www.cmfchile.cl/institucional/inc/deposito_fondos_mutuos.php> |
+| Reglamentos Internos – FI | <https://www.cmfchile.cl/institucional/inc/deposito_fondos_inversion.php> |
+| Buscador global de entidades | <https://www.cmfchile.cl/institucional/mercados/consulta_busqueda.php> |
 | Normativa para AGF | <https://www.cmfchile.cl/institucional/legislacion_normativa/normativa2.php?hidden_mercado=V&entidad_web=RGAGF> |
 
 ---
