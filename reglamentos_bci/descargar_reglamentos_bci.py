@@ -44,12 +44,16 @@ PDFS_DIR = BASE_DIR / "pdfs"
 
 CMF_BASE = "https://www.cmfchile.cl"
 
-# Página de búsqueda de Fondos Mutuos en el portal CMF
-CMF_FM_BUSQUEDA = f"{CMF_BASE}/institucional/mercados/fondos_mutuos.php"
-# Página de búsqueda de Fondos de Inversión en el portal CMF
-CMF_FI_BUSQUEDA = f"{CMF_BASE}/institucional/mercados/fondos_inversion.php"
-# Página de búsqueda de Reglamentos Internos en el portal CMF
-CMF_REGLAMENTOS = f"{CMF_BASE}/institucional/mercados/reglamentos_internos.php"
+# Página de listado de Fondos Mutuos en el portal CMF (nuevo portal post-2024)
+CMF_FM_BUSQUEDA = f"{CMF_BASE}/institucional/mercados/consulta.php?mercado=V&entidad=RGFMU"
+# Página de listado de Fondos de Inversión en el portal CMF (nuevo portal post-2024)
+CMF_FI_BUSQUEDA = f"{CMF_BASE}/institucional/mercados/consulta.php?mercado=V&entidad=RGFI"
+# Registro Público de Depósito de Reglamentos Internos – Fondos Mutuos
+CMF_FM_REGLAMENTOS = f"{CMF_BASE}/institucional/inc/deposito_fondos_mutuos.php"
+# Registro Público de Depósito de Reglamentos Internos – Fondos de Inversión
+CMF_FI_REGLAMENTOS = f"{CMF_BASE}/institucional/inc/deposito_fondos_inversion.php"
+# Buscador global de entidades fiscalizadas
+CMF_BUSQUEDA_GLOBAL = f"{CMF_BASE}/institucional/mercados/consulta_busqueda.php"
 
 # Nombre oficial de BCI Asset Management en el registro CMF.
 # Si la búsqueda no retorna resultados, verifica el nombre exacto en:
@@ -305,14 +309,39 @@ def buscar_fondos_mutuos() -> list[dict]:
     """
     Consulta el portal CMF para obtener los Fondos Mutuos de BCI AM.
 
+    Intenta primero el Registro Público de Depósito de Reglamentos Internos
+    (deposito_fondos_mutuos.php) filtrando por administradora.  Si no retorna
+    resultados, recurre al listado general (consulta.php) y filtra localmente.
+
     Returns:
         Lista de dicts con los campos definidos en CAMPOS_CSV.
     """
     print("Buscando Fondos Mutuos de BCI Asset Management en CMF…")
     fondos: list[dict] = []
 
+    # Estrategia 1: Registro de reglamentos filtrado por administradora
+    html_reg = ""
     try:
-        html = fetch(CMF_FM_BUSQUEDA, post_data={"administradora": BCI_AM_NOMBRE})
+        html_reg = fetch(
+            CMF_FM_REGLAMENTOS,
+            post_data={"administradora": BCI_AM_NOMBRE, "boton_buscar": "Buscar"},
+        )
+    except RuntimeError as exc:
+        print(f"  ⚠️  No se pudo usar registro de reglamentos FM: {exc}", file=sys.stderr)
+
+    # Estrategia 2: Listado general (GET sin filtro, se filtra localmente)
+    html_lista = ""
+    try:
+        html_lista = fetch(CMF_FM_BUSQUEDA)
+    except RuntimeError as exc:
+        print(f"  ❌  Error al buscar fondos mutuos: {exc}", file=sys.stderr)
+
+    # Usar el HTML con más contenido relacionado con BCI
+    html = html_reg if html_reg and BCI_AM_NOMBRE.upper() in html_reg.upper() else html_lista
+    if not html:
+        return fondos
+
+    try:
         _, rows = _parse_tabla(html)
 
         for row in rows:
@@ -347,8 +376,8 @@ def buscar_fondos_mutuos() -> list[dict]:
             print(f"  ✅  FM: {nombre}")
             time.sleep(DELAY_ENTRE_REQUESTS)
 
-    except RuntimeError as exc:
-        print(f"  ❌  Error al buscar fondos mutuos: {exc}", file=sys.stderr)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ❌  Error al procesar fondos mutuos: {exc}", file=sys.stderr)
 
     return fondos
 
@@ -357,14 +386,40 @@ def buscar_fondos_inversion() -> list[dict]:
     """
     Consulta el portal CMF para obtener los Fondos de Inversión de BCI AM.
 
+    Intenta primero el Registro Público de Depósito de Reglamentos Internos
+    (deposito_fondos_inversion.php) filtrando por administradora.  Si no
+    retorna resultados, recurre al listado general (consulta.php) y filtra
+    localmente.
+
     Returns:
         Lista de dicts con los campos definidos en CAMPOS_CSV.
     """
     print("Buscando Fondos de Inversión de BCI Asset Management en CMF…")
     fondos: list[dict] = []
 
+    # Estrategia 1: Registro de reglamentos filtrado por administradora
+    html_reg = ""
     try:
-        html = fetch(CMF_FI_BUSQUEDA, post_data={"administradora": BCI_AM_NOMBRE})
+        html_reg = fetch(
+            CMF_FI_REGLAMENTOS,
+            post_data={"administradora": BCI_AM_NOMBRE, "boton_buscar": "Buscar"},
+        )
+    except RuntimeError as exc:
+        print(f"  ⚠️  No se pudo usar registro de reglamentos FI: {exc}", file=sys.stderr)
+
+    # Estrategia 2: Listado general (GET sin filtro, se filtra localmente)
+    html_lista = ""
+    try:
+        html_lista = fetch(CMF_FI_BUSQUEDA)
+    except RuntimeError as exc:
+        print(f"  ❌  Error al buscar fondos de inversión: {exc}", file=sys.stderr)
+
+    # Usar el HTML con más contenido relacionado con BCI
+    html = html_reg if html_reg and BCI_AM_NOMBRE.upper() in html_reg.upper() else html_lista
+    if not html:
+        return fondos
+
+    try:
         _, rows = _parse_tabla(html)
 
         for row in rows:
@@ -399,8 +454,8 @@ def buscar_fondos_inversion() -> list[dict]:
             print(f"  ✅  FI: {nombre}")
             time.sleep(DELAY_ENTRE_REQUESTS)
 
-    except RuntimeError as exc:
-        print(f"  ❌  Error al buscar fondos de inversión: {exc}", file=sys.stderr)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ❌  Error al procesar fondos de inversión: {exc}", file=sys.stderr)
 
     return fondos
 
@@ -579,7 +634,7 @@ def escribir_md(fondos: list[dict], ruta: Path) -> None:
         "",
         "- [NCG N° 365](../normativa/ncg/ncg_365.md) – Información sobre reglamentos internos de fondos",
         "- [Ley N° 20.712](../normativa/leyes/ley_20712.md) – Ley Única de Fondos",
-        f"- [Portal CMF – AGF]({CMF_BASE}/institucional/mercados/agf.php)",
+        f"- [Portal CMF – Buscador de entidades]({CMF_BUSQUEDA_GLOBAL})",
         "",
     ]
 
@@ -634,8 +689,10 @@ def main() -> None:
             "   Posibles causas:\n"
             "   • Sin acceso a internet o portal CMF temporalmente no disponible.\n"
             "   • El nombre de búsqueda no coincide exactamente con el registro CMF.\n"
-            "     Verifica en: https://www.cmfchile.cl/institucional/mercados/agf.php\n"
-            "   • El portal CMF puede requerir parámetros de búsqueda distintos.\n",
+            f"     Verifica en: {CMF_BUSQUEDA_GLOBAL}\n"
+            "   • El portal CMF puede haber actualizado su estructura de URLs.\n"
+            f"     Listado FM: {CMF_FM_BUSQUEDA}\n"
+            f"     Listado FI: {CMF_FI_BUSQUEDA}\n",
             file=sys.stderr,
         )
         sys.exit(1)
