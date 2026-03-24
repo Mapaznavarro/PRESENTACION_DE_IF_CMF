@@ -136,32 +136,91 @@ def fetch(url: str, retries: int = 3) -> str:
     return ""  # inalcanzable
 
 
-def download_file(url: str, dest: Path) -> bool:
+def download_file(url: str, dest: Path) -> "Path | None":
     """
     Descarga un archivo desde *url* y lo guarda en *dest*.
 
+    Verifica que el contenido descargado sea realmente un documento (PDF,
+    Word, etc.) y no una página HTML de error o redirección del servidor.
+    Si el Content-Type o los bytes mágicos indican una extensión diferente a
+    la de *dest*, el archivo se guarda con la extensión correcta.
+
     Returns:
-        True si la descarga fue exitosa, False en caso contrario.
+        El ``Path`` real donde se guardó el archivo si la descarga fue
+        exitosa, o ``None`` en caso contrario.
     """
     if dest.exists() and dest.stat().st_size > 1000:
         print(f"  [OMITIDO]  {dest.name} (ya existe)")
-        return True
+        return dest
 
     dest.parent.mkdir(parents=True, exist_ok=True)
     print(f"  [DESCARGANDO] {dest.name} … ", end="", flush=True)
     try:
         req = urllib.request.Request(url, headers=REQUEST_HEADERS)
         with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
+            content_type = (resp.headers.get("Content-Type") or "").lower()
             data = resp.read()
         if len(data) < 1000:
             print(f"ERROR (respuesta muy pequeña: {len(data)} bytes)")
-            return False
+            return None
+        # Rechazar respuestas HTML (páginas de error o redirección del portal)
+        if "text/html" in content_type and not (len(data) >= 4 and data[:4] == b"%PDF"):
+            print(
+                f"ERROR (el servidor devolvió HTML en lugar de un documento; "
+                f"Content-Type: {content_type})"
+            )
+            return None
+        # Ajustar extensión del archivo destino según el contenido real
+        dest = _ajustar_extension_por_contenido(dest, content_type, data)
         dest.write_bytes(data)
         print(f"OK ({len(data):,} bytes)")
-        return True
+        return dest
     except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
         print(f"ERROR ({exc})")
-        return False
+        return None
+
+
+def _ajustar_extension_por_contenido(dest: Path, content_type: str, data: bytes) -> Path:
+    """
+    Devuelve *dest* con la extensión corregida según el Content-Type o los
+    bytes mágicos del archivo, cuando la extensión actual no corresponde al
+    contenido real.
+
+    Por ejemplo, si el archivo fue nombrado `descarga.php` pero el servidor
+    devuelve `application/pdf`, la función retorna el mismo path con extensión
+    `.pdf`.
+    """
+    ext_actual = dest.suffix.lower()
+
+    # Mapeo de Content-Type a extensión esperada
+    tipo_a_ext: dict[str, str] = {
+        "application/pdf": ".pdf",
+        "application/msword": ".doc",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+        "application/vnd.ms-excel": ".xls",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+    }
+
+    ext_correcta: str | None = None
+    for mime, ext in tipo_a_ext.items():
+        if mime in content_type:
+            ext_correcta = ext
+            break
+
+    # Fallback: detectar PDF por bytes mágicos (%PDF)
+    if ext_correcta is None and len(data) >= 4 and data[:4] == b"%PDF":
+        ext_correcta = ".pdf"
+
+    if ext_correcta and ext_actual != ext_correcta:
+        nuevo_dest = dest.with_suffix(ext_correcta)
+        print(
+            f"\n  [AVISO] extensión corregida: {dest.name} → {nuevo_dest.name} "
+            f"(Content-Type: {content_type or 'desconocido'})",
+            end="",
+        )
+        return nuevo_dest
+
+    return dest
 
 
 # ---------------------------------------------------------------------------
@@ -522,9 +581,13 @@ def _nombre_archivo_descarga(
     ``<nombre_original>_<rut_agf>_<rut_fondo>_<sufijo>.<ext>``.
 
     El nombre original se extrae del parámetro ``archivo`` de la URL o del
-    último segmento del path.  Si no es posible determinarlo, se usa
-    "descarga" como base.
+    último segmento del path.  Si no es posible determinarlo, o si la URL
+    apunta a un script PHP/servidor sin extensión de documento, se usa `.pdf`
+    como extensión predeterminada.
     """
+    # Extensiones de documento consideradas válidas
+    _EXTS_DOC = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".odt", ".ods"}
+
     # Intentar extraer nombre original del parámetro ?archivo=...
     try:
         params = urllib.parse.parse_qs(urllib.parse.urlparse(url_descarga).query)
@@ -538,6 +601,11 @@ def _nombre_archivo_descarga(
             ext = Path(path_part).suffix or ".pdf"
     except Exception:
         stem = "descarga"
+        ext = ".pdf"
+
+    # Si la extensión no es un tipo de documento conocido (p.ej. ".php"),
+    # se asume que el servidor entregará un PDF.
+    if ext.lower() not in _EXTS_DOC:
         ext = ".pdf"
 
     # Limpiar componentes
@@ -770,9 +838,9 @@ def procesar_fondo(
         nombre_pdf = _nombre_archivo_descarga(url_descarga, rut_agf, rut_fondo, sufijo)
         dest = pdfs_dir / nombre_pdf
 
-        ok = download_file(url_descarga, dest)
-        if ok:
-            resultado[campos[i]] = nombre_pdf
+        saved = download_file(url_descarga, dest)
+        if saved is not None:
+            resultado[campos[i]] = saved.name
             descargas_ok += 1
         time.sleep(delay)
 
