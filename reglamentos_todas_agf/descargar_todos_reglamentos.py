@@ -44,6 +44,7 @@ import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
+from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
 from datetime import datetime
@@ -405,14 +406,33 @@ def _extraer_links_primera_tabla(html: str) -> list[tuple[str, str]]:
 
 
 def _absolute(href: str) -> str:
-    """Convierte un href relativo en URL absoluta del portal CMF."""
+    """Convierte un href relativo en URL absoluta del portal CMF.
+
+    Decodifica entidades HTML (p.ej. ``&amp;`` → ``&``) y
+    recodifica en porcentaje cualquier espacio o carácter de control en el
+    query string para evitar ``http.client.InvalidURL``.
+    """
     if not href:
         return ""
+    # Decodificar entidades HTML (p.ej. &amp; → &, &amp;amp; → &amp;)
+    href = unescape(href)
     if href.startswith("http"):
-        return href
-    if href.startswith("/"):
-        return f"{CMF_BASE}{href}"
-    return f"{CMF_BASE}/institucional/mercados/{href}"
+        url = href
+    elif href.startswith("/"):
+        url = f"{CMF_BASE}{href}"
+    else:
+        url = f"{CMF_BASE}/institucional/mercados/{href}"
+    # Validar que la URL pertenece al dominio esperado del portal CMF.
+    parsed = urllib.parse.urlparse(url)
+    if parsed.netloc and parsed.netloc != urllib.parse.urlparse(CMF_BASE).netloc:
+        return ""
+    # Re-codificar los valores del query string para que los espacios y otros
+    # caracteres de control queden como porcentaje (p.ej. ' ' → '%20').
+    params = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+    encoded_query = urllib.parse.urlencode(
+        {k: v[0] if len(v) == 1 else v for k, v in params.items()}, doseq=True
+    )
+    return urllib.parse.urlunparse(parsed._replace(query=encoded_query))
 
 
 def _extraer_rut_de_url(url: str) -> str:
