@@ -44,6 +44,28 @@ bash descargar_normativa.sh
 
 Los PDFs quedarán en la carpeta `normativa/pdfs/`. También puedes descargarlos individualmente desde los enlaces en cada documento o desde el [índice de PDFs](normativa/pdfs/README.md).
 
+## Reglamentos internos de fondos – Todas las AGF
+
+La carpeta [`reglamentos_todas_agf/`](reglamentos_todas_agf/) contiene un script Python
+que descarga automáticamente los **reglamentos internos** de los fondos de
+**todas las AGF** registradas en la CMF, creando una subcarpeta por cada administradora.
+
+```bash
+# Descargar reglamentos de TODAS las AGF (índices + PDFs)
+cd reglamentos_todas_agf
+python descargar_todos_reglamentos.py
+
+# Solo generar los índices sin descargar PDFs
+python descargar_todos_reglamentos.py --solo-indice
+
+# Solo una AGF específica
+python descargar_todos_reglamentos.py --agf "LARRAIN VIAL"
+```
+
+Los resultados quedan organizados en subcarpetas por AGF:
+`reglamentos_todas_agf/<NOMBRE_AGF>/fondos.csv`, `fondos.md` y `pdfs/`.  
+Consulta la documentación completa en [`reglamentos_todas_agf/README.md`](reglamentos_todas_agf/README.md).
+
 ## Reglamentos internos de fondos BCI Asset Management
 
 La carpeta [`reglamentos_bci/`](reglamentos_bci/) contiene un script Python y un
