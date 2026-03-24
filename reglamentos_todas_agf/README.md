@@ -55,7 +55,7 @@ python descargar_todos_reglamentos.py --delay 2.0
 ```
 
 El script:
-1. Consulta `https://www.cmfchile.cl/institucional/mercados/consulta.php?mercado=V&Estado=VI&entidad=RGAGF` para obtener el listado de AGF vigentes.
+1. Consulta `https://www.cmfchile.cl/portal/principal/613/w3-propertyvalue-18572.html` para obtener el listado completo de las 57 AGF vigentes (fuente primaria). Si esa URL no está disponible, recurre a `https://www.cmfchile.cl/institucional/mercados/consulta.php?mercado=V&Estado=VI&entidad=RGAGF` como respaldo.
 2. Por cada AGF, crea una subcarpeta con su nombre sanitizado.
 3. Busca todos los fondos de esa AGF en los registros de Fondos Mutuos y Fondos de Inversión de la CMF.
 4. Accede a la página de detalle de cada fondo para extraer el link al reglamento interno.
@@ -124,7 +124,8 @@ Cada subcarpeta de AGF contiene un `fondos.md` con:
 
 | Recurso | URL |
 |---------|-----|
-| Listado de AGF vigentes | <https://www.cmfchile.cl/institucional/mercados/consulta.php?mercado=V&Estado=VI&entidad=RGAGF> |
+| **Listado de AGF vigentes (fuente primaria – 57 AGF)** | <https://www.cmfchile.cl/portal/principal/613/w3-propertyvalue-18572.html> |
+| Listado de AGF vigentes (fuente de respaldo) | <https://www.cmfchile.cl/institucional/mercados/consulta.php?mercado=V&Estado=VI&entidad=RGAGF> |
 | Listado de Fondos Mutuos | <https://www.cmfchile.cl/institucional/mercados/consulta.php?mercado=V&entidad=RGFMU> |
 | Listado de Fondos de Inversión | <https://www.cmfchile.cl/institucional/mercados/consulta.php?mercado=V&entidad=RGFI> |
 | Reglamentos Internos – FM | <https://www.cmfchile.cl/institucional/inc/deposito_fondos_mutuos.php> |

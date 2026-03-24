@@ -55,7 +55,11 @@ BASE_DIR = Path(__file__).parent
 
 CMF_BASE = "https://www.cmfchile.cl"
 
-# Listado de AGF vigentes
+# Listado de AGF vigentes – portal principal (57 AGF, fuente primaria)
+CMF_AGF_PORTAL = (
+    f"{CMF_BASE}/portal/principal/613/w3-propertyvalue-18572.html"
+)
+# Listado de AGF vigentes – portal institucional (fallback)
 CMF_AGF_LISTA = (
     f"{CMF_BASE}/institucional/mercados/consulta.php"
     "?mercado=V&Estado=VI&entidad=RGAGF"
@@ -262,6 +266,159 @@ def _parse_tabla(html: str) -> tuple[list[str], list[dict]]:
     return p.headers, p.rows
 
 
+class _PortalAGFParser(HTMLParser):
+    """
+    Extrae el listado de AGF desde la página del portal CMF
+    (``w3-propertyvalue-18572.html``).
+
+    El portal principal presenta las entidades como filas de tabla o
+    elementos de lista.  El parser recoge todos los pares (nombre, href)
+    que identifiquen AGF dentro del HTML.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._in_table = 0
+        self._in_row = False
+        self._in_cell = False
+        self._cell_text = ""
+        self._cell_href = ""
+        self._current_row: list[tuple[str, str]] = []
+        self._header_captured = False
+        self.headers: list[str] = []
+        self.rows: list[dict] = []
+        # Para listas (<li><a href=…>Nombre</a></li>)
+        self._in_li = False
+        self._li_href = ""
+        self._li_text = ""
+        self.list_entries: list[tuple[str, str]] = []  # (nombre, href)
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        ad = dict(attrs)
+        if tag == "table":
+            self._in_table += 1
+        elif tag == "tr" and self._in_table:
+            self._in_row = True
+            self._current_row = []
+        elif tag in ("td", "th") and self._in_row:
+            self._in_cell = True
+            self._cell_text = ""
+            self._cell_href = ad.get("href", "") or ""
+        elif tag == "a":
+            href = ad.get("href", "") or ""
+            if self._in_cell and not self._cell_href:
+                self._cell_href = href
+            if self._in_li and not self._li_href:
+                self._li_href = href
+        elif tag == "li":
+            self._in_li = True
+            self._li_href = ""
+            self._li_text = ""
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in ("td", "th") and self._in_cell:
+            self._current_row.append((self._cell_text.strip(), self._cell_href.strip()))
+            self._in_cell = False
+        elif tag == "tr" and self._in_row:
+            if self._current_row:
+                texts = [t for t, _ in self._current_row]
+                if not self._header_captured:
+                    self.headers = texts
+                    self._header_captured = True
+                else:
+                    row: dict = {}
+                    for i, (text, href) in enumerate(self._current_row):
+                        key = (
+                            self.headers[i] if i < len(self.headers) else f"col_{i}"
+                        )
+                        row[key] = text
+                        if href:
+                            row[f"__href_{key}"] = href
+                    self.rows.append(row)
+            self._in_row = False
+        elif tag == "table":
+            self._in_table = max(0, self._in_table - 1)
+        elif tag == "li" and self._in_li:
+            text = self._li_text.strip()
+            href = self._li_href.strip()
+            if text:
+                self.list_entries.append((text, href))
+            self._in_li = False
+            self._li_href = ""
+            self._li_text = ""
+
+    def handle_data(self, data: str) -> None:
+        if self._in_cell:
+            self._cell_text += data
+        if self._in_li:
+            self._li_text += data
+
+
+def _extraer_agfs_portal(html: str, filtro_nombre: str = "") -> list[dict]:
+    """
+    Extrae el listado de AGF desde el HTML de la página del portal CMF
+    ``https://www.cmfchile.cl/portal/principal/613/w3-propertyvalue-18572.html``.
+
+    Intenta primero la estructura de tabla; si no obtiene resultados,
+    recurre a la estructura de lista ``<li>``.
+
+    Returns:
+        Lista de dicts con claves: nombre, rut, estado, link_detalle.
+    """
+    p = _PortalAGFParser()
+    p.feed(html)
+
+    agfs: list[dict] = []
+
+    # --- Intentar tabla ---
+    if p.rows:
+        for row in p.rows:
+            nombre = _primer_valor(row, ("nombre", "razon", "denominacion", "sociedad"))
+            rut = _primer_valor(row, ("rut", "run"))
+            estado = _primer_valor(row, ("estado", "vigencia"))
+            href = _primer_href(row)
+
+            if not nombre:
+                # Puede que la primera columna sea el nombre sin cabecera reconocida
+                first_key = next(
+                    (k for k in row if not k.startswith("__href_")), None
+                )
+                if first_key:
+                    nombre = str(row[first_key]).strip()
+                    href = row.get(f"__href_{first_key}", href)
+
+            if not nombre:
+                continue
+            if filtro_nombre and filtro_nombre.upper() not in nombre.upper():
+                continue
+
+            agfs.append({
+                "nombre": nombre,
+                "rut": rut,
+                "estado": estado,
+                "link_detalle": _absolute(href) if href else "",
+            })
+
+    # --- Fallback: estructura de lista ---
+    if not agfs and p.list_entries:
+        for nombre, href in p.list_entries:
+            if not nombre.strip():
+                continue
+            if filtro_nombre and filtro_nombre.upper() not in nombre.upper():
+                continue
+            # La página del portal lista solo AGF inscritas, por lo que se
+            # asume estado "Vigente" cuando el formato de lista no incluye
+            # columna de estado.
+            agfs.append({
+                "nombre": nombre.strip(),
+                "rut": "",
+                "estado": "Vigente",
+                "link_detalle": _absolute(href) if href else "",
+            })
+
+    return agfs
+
+
 # ---------------------------------------------------------------------------
 # Extracción de links de reglamento interno
 # ---------------------------------------------------------------------------
@@ -379,6 +536,10 @@ def obtener_lista_agfs(filtro_nombre: str = "") -> list[dict]:
     """
     Consulta el portal CMF para obtener la lista de todas las AGF vigentes.
 
+    Intenta primero el portal principal (``CMF_AGF_PORTAL``), que lista las
+    57 AGF inscritas.  Si esa fuente no retorna resultados, recurre al portal
+    institucional (``CMF_AGF_LISTA``) como respaldo.
+
     Args:
         filtro_nombre: Si se indica, retorna solo las AGF cuyo nombre contenga
                        este texto (insensible a mayúsculas).
@@ -389,38 +550,63 @@ def obtener_lista_agfs(filtro_nombre: str = "") -> list[dict]:
     print("Obteniendo lista de AGF vigentes desde CMF…")
     agfs: list[dict] = []
 
+    # --- Fuente primaria: portal principal (57 AGF) ---
     try:
-        html = fetch(CMF_AGF_LISTA)
+        html_portal = fetch(CMF_AGF_PORTAL)
+        agfs = _extraer_agfs_portal(html_portal, filtro_nombre)
+        if agfs:
+            print(
+                f"  [portal] {len(agfs)} AGF obtenidas desde {CMF_AGF_PORTAL}"
+            )
     except RuntimeError as exc:
-        print(f"  ❌  No se pudo obtener la lista de AGF: {exc}", file=sys.stderr)
-        return agfs
+        print(
+            f"  ⚠️  No se pudo acceder al portal principal de AGF: {exc}",
+            file=sys.stderr,
+        )
 
-    _, rows = _parse_tabla(html)
+    # --- Fuente de respaldo: portal institucional ---
+    if not agfs:
+        print(
+            "  ⚠️  Intentando fuente de respaldo (portal institucional)…",
+            file=sys.stderr,
+        )
+        try:
+            html_inst = fetch(CMF_AGF_LISTA)
+            _, rows = _parse_tabla(html_inst)
 
-    for row in rows:
-        nombre = _primer_valor(row, ("nombre", "razon", "denominacion", "sociedad"))
-        rut = _primer_valor(row, ("rut", "run", "rut_sociedad"))
-        estado = _primer_valor(row, ("estado", "vigencia"))
-        href = _primer_href(row)
+            for row in rows:
+                nombre = _primer_valor(
+                    row, ("nombre", "razon", "denominacion", "sociedad")
+                )
+                rut = _primer_valor(row, ("rut", "run", "rut_sociedad"))
+                estado = _primer_valor(row, ("estado", "vigencia"))
+                href = _primer_href(row)
 
-        if not nombre:
-            continue
+                if not nombre:
+                    continue
+                if filtro_nombre and filtro_nombre.upper() not in nombre.upper():
+                    continue
 
-        if filtro_nombre and filtro_nombre.upper() not in nombre.upper():
-            continue
+                agfs.append({
+                    "nombre": nombre,
+                    "rut": rut,
+                    "estado": estado,
+                    "link_detalle": _absolute(href) if href else "",
+                })
+                print(f"  ✅  AGF: {nombre}")
 
-        agfs.append({
-            "nombre": nombre,
-            "rut": rut,
-            "estado": estado,
-            "link_detalle": _absolute(href) if href else "",
-        })
-        print(f"  ✅  AGF: {nombre}")
+        except RuntimeError as exc:
+            print(
+                f"  ❌  No se pudo obtener la lista de AGF: {exc}",
+                file=sys.stderr,
+            )
 
+    # --- Tercer intento: búsqueda POST global ---
     if not agfs and not filtro_nombre:
-        # Segundo intento: si la tabla está vacía, puede que haya un listado
-        # en un formato diferente; intentar con la búsqueda POST
-        print("  ⚠️  Tabla vacía; intentando búsqueda alternativa…", file=sys.stderr)
+        print(
+            "  ⚠️  Tabla vacía; intentando búsqueda alternativa…",
+            file=sys.stderr,
+        )
         try:
             html2 = fetch(
                 CMF_BUSQUEDA_GLOBAL,
@@ -441,6 +627,10 @@ def obtener_lista_agfs(filtro_nombre: str = "") -> list[dict]:
                     })
         except RuntimeError:
             pass
+
+    if agfs:
+        for a in agfs:
+            print(f"  ✅  AGF: {a['nombre']}")
 
     print(f"\nTotal AGF encontradas: {len(agfs)}\n")
     return agfs
@@ -864,7 +1054,7 @@ def escribir_md_agf(resumen: list[dict], ruta: Path) -> None:
         "",
         "- [NCG N° 365](../normativa/ncg/ncg_365.md) – Información sobre reglamentos internos de fondos",
         "- [Ley N° 20.712](../normativa/leyes/ley_20712.md) – Ley Única de Fondos",
-        f"- [Portal CMF – Lista de AGF]({CMF_AGF_LISTA})",
+        f"- [Portal CMF – Lista de AGF]({CMF_AGF_PORTAL})",
         "",
     ]
 
@@ -1012,7 +1202,8 @@ def main() -> None:
             "\n⚠️  No se encontraron AGF en el portal CMF.\n"
             "   Posibles causas:\n"
             "   • Sin acceso a internet o portal CMF temporalmente no disponible.\n"
-            f"     URL esperada: {CMF_AGF_LISTA}\n"
+            f"     URL primaria  : {CMF_AGF_PORTAL}\n"
+            f"     URL de respaldo: {CMF_AGF_LISTA}\n"
             "   • El portal CMF puede haber actualizado su estructura de URLs.\n",
             file=sys.stderr,
         )
