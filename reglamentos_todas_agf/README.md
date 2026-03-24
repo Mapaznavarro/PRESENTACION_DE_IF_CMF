@@ -11,6 +11,7 @@ Comisión para el Mercado Financiero (CMF) de Chile.
 | `descargar_todos_reglamentos.py` | Script Python que navega el portal CMF, genera los índices y descarga los archivos para todas las AGF |
 | `indice_agf.csv` | Resumen global de todas las AGF procesadas (generado por el script) |
 | `indice_agf.md` | Versión Markdown del resumen global (generado por el script) |
+| `fallos_extraccion.csv` | AGF y fondos para los que no se pudo extraer información (generado por el script, solo si hubo fallos) |
 | `<NOMBRE_AGF>/` | Subcarpeta por cada AGF (generada por el script) |
 | `<NOMBRE_AGF>/fondos.csv` | Índice CSV de los fondos de esa AGF con estado de descarga |
 | `<NOMBRE_AGF>/fondos.md` | Versión Markdown del índice de fondos |
@@ -82,6 +83,7 @@ reglamentos_todas_agf/
 ├── README.md
 ├── indice_agf.csv                  ← resumen global de AGF
 ├── indice_agf.md
+├── fallos_extraccion.csv           ← AGF/fondos con fallo de extracción (si los hay)
 ├── BCI_ASSET_MANAGEMENT_AGF_SA/
 │   ├── fondos.csv
 │   ├── fondos.md
