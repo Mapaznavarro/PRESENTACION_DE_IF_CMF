@@ -136,6 +136,9 @@ def download_pdf(url: str, dest: Path) -> bool:
     """
     Descarga un PDF desde *url* y lo guarda en *dest*.
 
+    Verifica que el contenido recibido sea realmente un documento (PDF,
+    Word, etc.) y no una página HTML de error devuelta por el servidor.
+
     Returns:
         True si la descarga fue exitosa, False en caso contrario.
     """
@@ -148,9 +151,17 @@ def download_pdf(url: str, dest: Path) -> bool:
     try:
         req = urllib.request.Request(url, headers=REQUEST_HEADERS)
         with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
+            content_type = (resp.headers.get("Content-Type") or "").lower()
             data = resp.read()
         if len(data) < 1000:
             print(f"ERROR (respuesta muy pequeña: {len(data)} bytes)")
+            return False
+        # Rechazar respuestas HTML (páginas de error o redirección del portal)
+        if "text/html" in content_type and not (len(data) >= 4 and data[:4] == b"%PDF"):
+            print(
+                f"ERROR (el servidor devolvió HTML en lugar de un documento; "
+                f"Content-Type: {content_type})"
+            )
             return False
         dest.write_bytes(data)
         print(f"OK ({len(data):,} bytes)")
