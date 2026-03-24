@@ -3,21 +3,24 @@
 descargar_todos_reglamentos.py – Descarga los reglamentos internos de los fondos
 de TODAS las AGF (Administradoras Generales de Fondos) inscritas en la CMF de Chile.
 
-El script:
-  1. Consulta el portal institucional de la CMF para obtener el listado completo
-     de AGF vigentes registradas.
-  2. Por cada AGF, crea una subcarpeta con su nombre sanitizado.
-  3. Busca todos los Fondos Mutuos (FM) y Fondos de Inversión (FI) asociados.
-  4. Accede a la página de detalle de cada fondo para obtener el link al reglamento
-     interno depositado ante la CMF según la NCG N° 365.
-  5. Descarga los PDFs en la subcarpeta `pdfs/` de cada AGF.
-  6. Genera `fondos.csv` y `fondos.md` con el índice de fondos por AGF.
-  7. Genera un índice global `indice_agf.csv` y `indice_agf.md`.
+Flujo de navegación:
+  1. Ruta Inicial: https://www.cmfchile.cl/institucional/mercados/consulta.php?mercado=V&Estado=VI&entidad=RGAGF
+  2. Se procesa SOLO la tabla con columnas "R.U.T." y "Entidad".
+     Se usa el link del RUT de cada AGF.
+  3. En la página de cada AGF se hace clic en el botón "Fondos Administrados".
+  4. Se procesa SOLO la tabla con columnas "R.U.T." y "Entidad".
+     Se usa el link del RUT de cada Fondo.
+  5. En la página de cada Fondo se hace clic en el botón "reglamento interno".
+  6. Aparecen dos tablas con id="Tabla"; se toma la PRIMERA.
+  7. En esa tabla hay dos links "Descarga". Se descargan ambos archivos:
+       - Primer link  → nombre: <original>_<rut_agf>_<rut_fondo>_Reg_Interno.<ext>
+       - Segundo link → nombre: <original>_<rut_agf>_<rut_fondo>_modif.<ext>
+  8. Se recorren todos los fondos de la AGF y luego se pasa a la siguiente AGF.
 
 Genera (por cada AGF):
-  <carpeta_agf>/fondos.csv   Índice CSV con datos de fondos y links a reglamentos
-  <carpeta_agf>/fondos.md    Versión Markdown del mismo índice
-  <carpeta_agf>/pdfs/        PDFs de los reglamentos internos descargados
+  <CARPETA_AGF>/fondos.csv   Índice CSV con datos de fondos y estado de descarga
+  <CARPETA_AGF>/fondos.md    Versión Markdown del mismo índice
+  <CARPETA_AGF>/pdfs/        Archivos descargados (reglamento + modificaciones)
 
 Genera (global):
   indice_agf.csv             Resumen de todas las AGF procesadas
@@ -25,11 +28,9 @@ Genera (global):
 
 Uso:
   python descargar_todos_reglamentos.py                  # descarga todo
-  python descargar_todos_reglamentos.py --solo-indice    # solo genera índices
-  python descargar_todos_reglamentos.py --agf "BICE"     # solo la AGF que contenga "BICE"
-  python descargar_todos_reglamentos.py --tipo FM        # solo Fondos Mutuos
-  python descargar_todos_reglamentos.py --tipo FI        # solo Fondos de Inversión
-  python descargar_todos_reglamentos.py --delay 1.5      # pausa entre peticiones
+  python descargar_todos_reglamentos.py --solo-indice    # solo genera índices CSV/MD
+  python descargar_todos_reglamentos.py --agf "BICE"     # solo AGF cuyo nombre/RUT contenga "BICE"
+  python descargar_todos_reglamentos.py --delay 1.5      # pausa entre peticiones (seg)
 
 Requisitos: Python 3.10+ (sin dependencias externas).
 """
@@ -55,29 +56,11 @@ BASE_DIR = Path(__file__).parent
 
 CMF_BASE = "https://www.cmfchile.cl"
 
-# Listado de AGF vigentes – portal principal (57 AGF, fuente primaria)
-CMF_AGF_PORTAL = (
-    f"{CMF_BASE}/portal/principal/613/w3-propertyvalue-18572.html"
-)
-# Listado de AGF vigentes – portal institucional (fallback)
+# Ruta Inicial – listado de AGF vigentes en el portal institucional CMF
 CMF_AGF_LISTA = (
     f"{CMF_BASE}/institucional/mercados/consulta.php"
     "?mercado=V&Estado=VI&entidad=RGAGF"
 )
-# Registro Público de Depósito de Reglamentos Internos – Fondos Mutuos
-CMF_FM_REGLAMENTOS = f"{CMF_BASE}/institucional/inc/deposito_fondos_mutuos.php"
-# Registro Público de Depósito de Reglamentos Internos – Fondos de Inversión
-CMF_FI_REGLAMENTOS = f"{CMF_BASE}/institucional/inc/deposito_fondos_inversion.php"
-# Listado general de Fondos Mutuos
-CMF_FM_BUSQUEDA = (
-    f"{CMF_BASE}/institucional/mercados/consulta.php?mercado=V&entidad=RGFMU"
-)
-# Listado general de Fondos de Inversión
-CMF_FI_BUSQUEDA = (
-    f"{CMF_BASE}/institucional/mercados/consulta.php?mercado=V&entidad=RGFI"
-)
-# Buscador global de entidades fiscalizadas
-CMF_BUSQUEDA_GLOBAL = f"{CMF_BASE}/institucional/mercados/consulta_busqueda.php"
 
 TIMESTAMP_FORMAT = "%d/%m/%Y %H:%M:%S"
 
@@ -94,28 +77,22 @@ REQUEST_HEADERS = {
 DELAY_ENTRE_REQUESTS = 1.0   # segundos entre peticiones sucesivas
 TIMEOUT_S = 30               # tiempo máximo por petición (segundos)
 
+# Campos de los índices CSV
 CAMPOS_CSV_FONDOS = [
-    "tipo",
-    "codigo",
-    "nombre",
-    "administrador",
-    "series",
-    "moneda",
-    "estado",
-    "fecha_reglamento",
+    "rut_fondo",
+    "nombre_fondo",
+    "link_fondo",
     "link_reglamento",
-    "archivo_pdf",
-    "link_detalle_cmf",
+    "archivo_reg_interno",
+    "archivo_modif",
+    "estado",
 ]
 
 CAMPOS_CSV_AGF = [
     "nombre_agf",
     "rut",
-    "estado",
     "carpeta",
     "total_fondos",
-    "fondos_mutuos",
-    "fondos_inversion",
     "con_reglamento",
     "link_cmf",
 ]
@@ -125,14 +102,13 @@ CAMPOS_CSV_AGF = [
 # ---------------------------------------------------------------------------
 
 
-def fetch(url: str, post_data: dict | None = None, retries: int = 3) -> str:
+def fetch(url: str, retries: int = 3) -> str:
     """
-    Realiza una petición HTTP GET o POST y retorna el cuerpo de la respuesta.
+    Realiza una petición HTTP GET y retorna el cuerpo de la respuesta.
 
     Args:
-        url:       URL destino.
-        post_data: Si se provee, realiza POST con estos parámetros form-encoded.
-        retries:   Número de reintentos ante error de red.
+        url:     URL destino.
+        retries: Número de reintentos ante error de red.
 
     Returns:
         HTML/texto de la respuesta.
@@ -140,14 +116,9 @@ def fetch(url: str, post_data: dict | None = None, retries: int = 3) -> str:
     Raises:
         RuntimeError: Si no se puede obtener la respuesta tras los reintentos.
     """
-    encoded = urllib.parse.urlencode(post_data).encode("utf-8") if post_data else None
-    headers = dict(REQUEST_HEADERS)
-    if encoded:
-        headers["Content-Type"] = "application/x-www-form-urlencoded"
-
     for attempt in range(1, retries + 1):
         try:
-            req = urllib.request.Request(url, data=encoded, headers=headers)
+            req = urllib.request.Request(url, headers=REQUEST_HEADERS)
             with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
                 return resp.read().decode("utf-8", errors="replace")
         except urllib.error.URLError as exc:
@@ -164,9 +135,9 @@ def fetch(url: str, post_data: dict | None = None, retries: int = 3) -> str:
     return ""  # inalcanzable
 
 
-def download_pdf(url: str, dest: Path) -> bool:
+def download_file(url: str, dest: Path) -> bool:
     """
-    Descarga un PDF desde *url* y lo guarda en *dest*.
+    Descarga un archivo desde *url* y lo guarda en *dest*.
 
     Returns:
         True si la descarga fue exitosa, False en caso contrario.
@@ -197,13 +168,12 @@ def download_pdf(url: str, dest: Path) -> bool:
 # ---------------------------------------------------------------------------
 
 
-class _TablaParser(HTMLParser):
+class _RutTablaParser(HTMLParser):
     """
-    Extrae filas de tablas HTML del portal CMF.
+    Extrae las filas de la tabla con columnas R.U.T. y Entidad del portal CMF.
 
-    Registra las cabeceras de la primera fila ``<th>`` o ``<tr>`` y los
-    datos de las filas siguientes.  También captura el primer ``href`` de
-    cada celda para extraer links a páginas de detalle.
+    Para cada fila de datos retorna el texto del RUT, el href del link en esa
+    celda y el texto de la columna Entidad.
     """
 
     def __init__(self) -> None:
@@ -215,7 +185,7 @@ class _TablaParser(HTMLParser):
         self._cell_href = ""
         self._current_row: list[tuple[str, str]] = []  # (texto, href)
         self.headers: list[str] = []
-        self.rows: list[dict] = []
+        self.rows: list[list[tuple[str, str]]] = []
         self._header_captured = False
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
@@ -228,13 +198,15 @@ class _TablaParser(HTMLParser):
         elif tag in ("td", "th") and self._in_row:
             self._in_cell = True
             self._cell_text = ""
-            self._cell_href = ad.get("href", "") or ""
+            self._cell_href = ""
         elif tag == "a" and self._in_cell and not self._cell_href:
-            self._cell_href = ad.get("href", "") or ""
+            self._cell_href = (ad.get("href", "") or "").strip()
 
     def handle_endtag(self, tag: str) -> None:
         if tag in ("td", "th") and self._in_cell:
-            self._current_row.append((self._cell_text.strip(), self._cell_href.strip()))
+            self._current_row.append(
+                (self._cell_text.strip(), self._cell_href.strip())
+            )
             self._in_cell = False
         elif tag == "tr" and self._in_row:
             if self._current_row:
@@ -243,13 +215,7 @@ class _TablaParser(HTMLParser):
                     self.headers = texts
                     self._header_captured = True
                 else:
-                    row: dict = {}
-                    for i, (text, href) in enumerate(self._current_row):
-                        key = self.headers[i] if i < len(self.headers) else f"col_{i}"
-                        row[key] = text
-                        if href:
-                            row[f"__href_{key}"] = href
-                    self.rows.append(row)
+                    self.rows.append(list(self._current_row))
             self._in_row = False
         elif tag == "table":
             self._in_table = max(0, self._in_table - 1)
@@ -259,241 +225,253 @@ class _TablaParser(HTMLParser):
             self._cell_text += data
 
 
-def _parse_tabla(html: str) -> tuple[list[str], list[dict]]:
-    """Devuelve (headers, rows) extraídos de la primera tabla del HTML."""
-    p = _TablaParser()
-    p.feed(html)
-    return p.headers, p.rows
+class _LinksParser(HTMLParser):
+    """Extrae todos los pares (texto, href) de los links de un HTML."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._in_a = False
+        self._current_href = ""
+        self._current_text = ""
+        self.links: list[tuple[str, str]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "a":
+            self._in_a = True
+            ad = dict(attrs)
+            self._current_href = (ad.get("href", "") or "").strip()
+            self._current_text = ""
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "a" and self._in_a:
+            self.links.append((self._current_text.strip(), self._current_href))
+            self._in_a = False
+
+    def handle_data(self, data: str) -> None:
+        if self._in_a:
+            self._current_text += data
 
 
-class _PortalAGFParser(HTMLParser):
+class _TablaIdParser(HTMLParser):
     """
-    Extrae el listado de AGF desde la página del portal CMF
-    (``w3-propertyvalue-18572.html``).
+    Extrae los links de la PRIMERA tabla con id="Tabla" (case-insensitive)
+    del HTML.
 
-    El portal principal presenta las entidades como filas de tabla o
-    elementos de lista.  El parser recoge todos los pares (nombre, href)
-    que identifiquen AGF dentro del HTML.
+    En la página de reglamento interno del portal CMF aparecen dos tablas con
+    ese id; se procesa únicamente la primera.
     """
 
     def __init__(self) -> None:
         super().__init__()
-        self._in_table = 0
-        self._in_row = False
-        self._in_cell = False
-        self._cell_text = ""
-        self._cell_href = ""
-        self._current_row: list[tuple[str, str]] = []
-        self._header_captured = False
-        self.headers: list[str] = []
-        self.rows: list[dict] = []
-        # Para listas (<li><a href=…>Nombre</a></li>)
-        self._in_li = False
-        self._li_href = ""
-        self._li_text = ""
-        self.list_entries: list[tuple[str, str]] = []  # (nombre, href)
+        self._in_target_table = False
+        self._depth = 0
+        self._target_found = False
+        self._done = False
+        self._in_a = False
+        self._current_href = ""
+        self._current_text = ""
+        self.links: list[tuple[str, str]] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if self._done:
+            return
         ad = dict(attrs)
         if tag == "table":
-            self._in_table += 1
-        elif tag == "tr" and self._in_table:
-            self._in_row = True
-            self._current_row = []
-        elif tag in ("td", "th") and self._in_row:
-            self._in_cell = True
-            self._cell_text = ""
-            self._cell_href = ad.get("href", "") or ""
-        elif tag == "a":
-            href = ad.get("href", "") or ""
-            if self._in_cell and not self._cell_href:
-                self._cell_href = href
-            if self._in_li and not self._li_href:
-                self._li_href = href
-        elif tag == "li":
-            self._in_li = True
-            self._li_href = ""
-            self._li_text = ""
+            tabla_id = (ad.get("id", "") or "").strip().lower()
+            if tabla_id == "tabla" and not self._target_found:
+                self._target_found = True
+                self._in_target_table = True
+                self._depth = 1
+            elif self._in_target_table:
+                self._depth += 1
+        elif self._in_target_table and tag == "a":
+            self._in_a = True
+            self._current_href = (ad.get("href", "") or "").strip()
+            self._current_text = ""
 
     def handle_endtag(self, tag: str) -> None:
-        if tag in ("td", "th") and self._in_cell:
-            self._current_row.append((self._cell_text.strip(), self._cell_href.strip()))
-            self._in_cell = False
-        elif tag == "tr" and self._in_row:
-            if self._current_row:
-                texts = [t for t, _ in self._current_row]
-                if not self._header_captured:
-                    self.headers = texts
-                    self._header_captured = True
-                else:
-                    row: dict = {}
-                    for i, (text, href) in enumerate(self._current_row):
-                        key = (
-                            self.headers[i] if i < len(self.headers) else f"col_{i}"
-                        )
-                        row[key] = text
-                        if href:
-                            row[f"__href_{key}"] = href
-                    self.rows.append(row)
-            self._in_row = False
-        elif tag == "table":
-            self._in_table = max(0, self._in_table - 1)
-        elif tag == "li" and self._in_li:
-            text = self._li_text.strip()
-            href = self._li_href.strip()
-            if text:
-                self.list_entries.append((text, href))
-            self._in_li = False
-            self._li_href = ""
-            self._li_text = ""
+        if self._done:
+            return
+        if tag == "table" and self._in_target_table:
+            self._depth -= 1
+            if self._depth == 0:
+                self._in_target_table = False
+                self._done = True
+        elif self._in_target_table and tag == "a" and self._in_a:
+            href = self._current_href
+            text = self._current_text.strip()
+            if href:
+                self.links.append((text, href))
+            self._in_a = False
 
     def handle_data(self, data: str) -> None:
-        if self._in_cell:
-            self._cell_text += data
-        if self._in_li:
-            self._li_text += data
+        if self._in_a and self._in_target_table and not self._done:
+            self._current_text += data
 
 
-def _extraer_agfs_portal(html: str, filtro_nombre: str = "") -> list[dict]:
+# ---------------------------------------------------------------------------
+# Funciones de parseo de la tabla R.U.T. / Entidad
+# ---------------------------------------------------------------------------
+
+
+def _parse_tabla_rut_entidad(html: str) -> list[dict]:
     """
-    Extrae el listado de AGF desde el HTML de la página del portal CMF
-    ``https://www.cmfchile.cl/portal/principal/613/w3-propertyvalue-18572.html``.
+    Extrae las entradas de la tabla con columnas R.U.T. y Entidad del HTML.
 
-    Intenta primero la estructura de tabla; si no obtiene resultados,
-    recurre a la estructura de lista ``<li>``.
+    Busca la primera tabla que contenga una columna cuya cabecera incluya
+    "R.U.T" o "RUT" y una columna cuya cabecera incluya "ENTIDAD" o similar.
+    Para cada fila de datos retorna el texto del RUT, el href del link en esa
+    celda y el texto de la columna Entidad.
 
     Returns:
-        Lista de dicts con claves: nombre, rut, estado, link_detalle.
+        Lista de dicts con claves: rut, entidad, link.
     """
-    p = _PortalAGFParser()
+    p = _RutTablaParser()
     p.feed(html)
 
-    agfs: list[dict] = []
+    if not p.headers:
+        return []
 
-    # --- Intentar tabla ---
-    if p.rows:
-        for row in p.rows:
-            nombre = _primer_valor(row, ("nombre", "razon", "denominacion", "sociedad"))
-            rut = _primer_valor(row, ("rut", "run"))
-            estado = _primer_valor(row, ("estado", "vigencia"))
-            href = _primer_href(row)
+    # Identificar índice de columna RUT y columna Entidad
+    rut_idx: int | None = None
+    entidad_idx: int | None = None
+    for i, h in enumerate(p.headers):
+        h_norm = h.upper().strip().replace(".", "").replace(" ", "")
+        if "RUT" in h_norm or "RUN" in h_norm:
+            if rut_idx is None:
+                rut_idx = i
+        elif any(
+            kw in h_norm
+            for kw in ("ENTIDAD", "NOMBRE", "RAZON", "DENOMINACION", "SOCIEDAD")
+        ):
+            if entidad_idx is None:
+                entidad_idx = i
 
-            if not nombre:
-                # Puede que la primera columna sea el nombre sin cabecera reconocida
-                first_key = next(
-                    (k for k in row if not k.startswith("__href_")), None
-                )
-                if first_key:
-                    nombre = str(row[first_key]).strip()
-                    href = row.get(f"__href_{first_key}", href)
+    if rut_idx is None:
+        return []
 
-            if not nombre:
-                continue
-            if filtro_nombre and filtro_nombre.upper() not in nombre.upper():
-                continue
+    result: list[dict] = []
+    for row_cells in p.rows:
+        if rut_idx >= len(row_cells):
+            continue
+        rut_text, rut_href = row_cells[rut_idx]
+        rut_text = rut_text.strip()
+        rut_href = rut_href.strip()
 
-            agfs.append({
-                "nombre": nombre,
-                "rut": rut,
-                "estado": estado,
-                "link_detalle": _absolute(href) if href else "",
-            })
+        entidad_text = ""
+        if entidad_idx is not None and entidad_idx < len(row_cells):
+            entidad_text = row_cells[entidad_idx][0].strip()
 
-    # --- Fallback: estructura de lista ---
-    if not agfs and p.list_entries:
-        for nombre, href in p.list_entries:
-            if not nombre.strip():
-                continue
-            if filtro_nombre and filtro_nombre.upper() not in nombre.upper():
-                continue
-            # La página del portal lista solo AGF inscritas, por lo que se
-            # asume estado "Vigente" cuando el formato de lista no incluye
-            # columna de estado.
-            agfs.append({
-                "nombre": nombre.strip(),
-                "rut": "",
-                "estado": "Vigente",
-                "link_detalle": _absolute(href) if href else "",
-            })
+        if not rut_text and not rut_href:
+            continue
 
-    return agfs
+        result.append(
+            {
+                "rut": rut_text,
+                "entidad": entidad_text,
+                "link": _absolute(rut_href),
+            }
+        )
+
+    return result
 
 
-# ---------------------------------------------------------------------------
-# Extracción de links de reglamento interno
-# ---------------------------------------------------------------------------
-
-_RE_REGLAMENTO_HREF = re.compile(
-    r'href=["\']([^"\']*(?:reglamento|REGLAMENTO|Reglamento)[^"\']*)["\']',
-    re.IGNORECASE,
-)
-_RE_PDF_HREF = re.compile(
-    r'href=["\']([^"\']+\.pdf)["\']',
-    re.IGNORECASE,
-)
-
-
-def extraer_link_reglamento(html: str) -> str:
+def _buscar_link_por_texto(html: str, texto_buscado: str) -> str:
     """
-    Extrae el primer link a un PDF de reglamento interno desde un HTML.
-
-    Primero busca links cuyo href contenga la palabra «reglamento»; si no
-    encuentra ninguno, devuelve el primer PDF listado en la página.
-
-    Returns:
-        URL absoluta del PDF, o cadena vacía si no se encuentra.
+    Devuelve el href del primer link cuyo texto contiene *texto_buscado*
+    (búsqueda case-insensitive).
     """
-    for m in _RE_REGLAMENTO_HREF.finditer(html):
-        href = m.group(1).strip()
-        if href.endswith(".pdf") or "pdf" in href.lower():
-            return _absolute(href)
-
-    # Segundo intento: cualquier PDF en la página
-    for m in _RE_PDF_HREF.finditer(html):
-        href = m.group(1).strip()
-        return _absolute(href)
-
+    p = _LinksParser()
+    p.feed(html)
+    texto_upper = texto_buscado.upper()
+    for texto, href in p.links:
+        if texto_upper in texto.upper():
+            return href
     return ""
+
+
+def _extraer_links_primera_tabla(html: str) -> list[tuple[str, str]]:
+    """
+    Extrae los links (texto, href) de la primera tabla con id="Tabla" del HTML.
+    """
+    p = _TablaIdParser()
+    p.feed(html)
+    return p.links
+
+
+# ---------------------------------------------------------------------------
+# Helpers de URL
+# ---------------------------------------------------------------------------
 
 
 def _absolute(href: str) -> str:
     """Convierte un href relativo en URL absoluta del portal CMF."""
+    if not href:
+        return ""
     if href.startswith("http"):
         return href
     if href.startswith("/"):
         return f"{CMF_BASE}{href}"
-    return f"{CMF_BASE}/{href}"
+    return f"{CMF_BASE}/institucional/mercados/{href}"
 
 
-# ---------------------------------------------------------------------------
-# Helpers de extracción de campos
-# ---------------------------------------------------------------------------
-
-
-def _primer_valor(row: dict, claves: tuple[str, ...]) -> str:
-    """Retorna el primer valor del dict cuya clave (en minúsculas) contenga alguna de las claves dadas."""
-    for k, v in row.items():
-        k_lower = k.lower()
-        if any(c in k_lower for c in claves) and not k.startswith("__href_"):
-            return str(v).strip()
-    return ""
-
-
-def _primer_href(row: dict) -> str:
-    """Retorna el primer valor de href almacenado en el dict."""
-    for k, v in row.items():
-        if k.startswith("__href_") and v:
-            return str(v).strip()
-    return ""
-
-
-def _extraer_fecha_reglamento(html: str) -> str:
-    """Extrae la fecha del reglamento interno desde el HTML de detalle del fondo."""
-    if not html:
+def _extraer_rut_de_url(url: str) -> str:
+    """Extrae el parámetro 'rut' de una URL del portal CMF."""
+    try:
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        return params.get("rut", [""])[0].strip()
+    except Exception:
         return ""
-    bloque = html[max(0, html.lower().find("reglamento")):][:500]
-    m = re.search(r"(\d{2}/\d{2}/\d{4}|\d{4}-\d{2}-\d{2})", bloque)
-    return m.group(1) if m else ""
+
+
+def _cambiar_pestania(url: str, nueva_pestania: int) -> str:
+    """
+    Devuelve la URL con el parámetro 'pestania' sustituido por *nueva_pestania*.
+    """
+    parsed = urllib.parse.urlparse(url)
+    params = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+    params["pestania"] = [str(nueva_pestania)]
+    new_query = urllib.parse.urlencode(
+        {k: v[0] if len(v) == 1 else v for k, v in params.items()}, doseq=True
+    )
+    return urllib.parse.urlunparse(parsed._replace(query=new_query))
+
+
+# ---------------------------------------------------------------------------
+# Funciones de navegación
+# ---------------------------------------------------------------------------
+
+
+def _url_fondos_administrados(html_agf: str, agf_url: str) -> str:
+    """
+    Obtiene la URL de la pestaña "Fondos Administrados" de una AGF.
+
+    Primero busca el link en el HTML por su texto.  Si no lo encuentra,
+    recurre a cambiar ``pestania=39`` en la URL de la AGF (pestania 39 es la
+    pestaña de Fondos Administrados según el portal CMF).
+    """
+    href = _buscar_link_por_texto(html_agf, "Fondos Administrados")
+    if href:
+        return _absolute(href)
+    if agf_url:
+        return _cambiar_pestania(agf_url, 39)
+    return ""
+
+
+def _url_reglamento_interno(html_fondo: str, fondo_url: str) -> str:
+    """
+    Obtiene la URL de la pestaña "Reglamento Interno" de un fondo.
+
+    Primero busca el link en el HTML por su texto.  Si no lo encuentra,
+    recurre a cambiar ``pestania=56`` en la URL del fondo (pestania 56 es la
+    pestaña de Reglamento Interno según el portal CMF).
+    """
+    href = _buscar_link_por_texto(html_fondo, "reglamento interno")
+    if href:
+        return _absolute(href)
+    if fondo_url:
+        return _cambiar_pestania(fondo_url, 56)
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -505,394 +483,354 @@ def _sanitizar_nombre_carpeta(nombre: str) -> str:
     """
     Convierte un nombre de AGF en un nombre de carpeta seguro para el sistema
     de archivos.
-
-    Elimina tildes y caracteres especiales, reemplaza espacios con guiones
-    bajos y trunca a 80 caracteres.
     """
-    # Normalizar unicode y eliminar diacríticos
     normalizado = unicodedata.normalize("NFKD", nombre)
     sin_acentos = "".join(c for c in normalizado if not unicodedata.combining(c))
-    # Conservar solo letras, dígitos, espacios y guiones
     limpio = re.sub(r"[^\w\s\-]", "", sin_acentos)
-    # Reemplazar espacios y guiones múltiples con un único guion bajo
     carpeta = re.sub(r"[\s\-]+", "_", limpio.strip())
     return carpeta[:80].upper()
 
 
-def _sanitizar_nombre_pdf(nombre: str) -> str:
-    """Convierte un nombre de fondo en un prefijo seguro para nombre de archivo PDF."""
-    normalizado = unicodedata.normalize("NFKD", nombre)
-    sin_acentos = "".join(c for c in normalizado if not unicodedata.combining(c))
-    limpio = re.sub(r"[^\w\s\-]", "", sin_acentos)
-    return re.sub(r"[\s\-]+", "_", limpio.strip().lower())[:60]
+def _nombre_archivo_descarga(
+    url_descarga: str,
+    rut_agf: str,
+    rut_fondo: str,
+    sufijo: str,
+) -> str:
+    """
+    Genera el nombre del archivo de descarga con el formato:
+    ``<nombre_original>_<rut_agf>_<rut_fondo>_<sufijo>.<ext>``.
+
+    El nombre original se extrae del parámetro ``archivo`` de la URL o del
+    último segmento del path.  Si no es posible determinarlo, se usa
+    "descarga" como base.
+    """
+    # Intentar extraer nombre original del parámetro ?archivo=...
+    try:
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(url_descarga).query)
+        archivo_param = params.get("archivo", [""])[0]
+        if archivo_param:
+            stem = Path(urllib.parse.unquote(archivo_param)).stem
+            ext = Path(urllib.parse.unquote(archivo_param)).suffix or ".pdf"
+        else:
+            path_part = urllib.parse.urlparse(url_descarga).path
+            stem = Path(path_part).stem or "descarga"
+            ext = Path(path_part).suffix or ".pdf"
+    except Exception:
+        stem = "descarga"
+        ext = ".pdf"
+
+    # Limpiar componentes
+    rut_agf_clean = re.sub(r"\W", "", rut_agf)
+    rut_fondo_clean = re.sub(r"\W", "", rut_fondo)
+    stem_clean = re.sub(r"[^\w\-]", "_", stem)[:60]
+    sufijo_clean = re.sub(r"\s+", "_", sufijo)
+
+    return f"{stem_clean}_{rut_agf_clean}_{rut_fondo_clean}_{sufijo_clean}{ext}"
 
 
 # ---------------------------------------------------------------------------
-# Obtención de lista de AGF
+# Obtención de la lista de AGF
 # ---------------------------------------------------------------------------
 
 
 def obtener_lista_agfs(filtro_nombre: str = "") -> list[dict]:
     """
-    Consulta el portal CMF para obtener la lista de todas las AGF vigentes.
+    Consulta la ruta inicial del portal CMF y extrae el listado de AGF
+    vigentes de la tabla R.U.T. / Entidad.
 
-    Intenta primero el portal principal (``CMF_AGF_PORTAL``), que lista las
-    57 AGF inscritas.  Si esa fuente no retorna resultados, recurre al portal
-    institucional (``CMF_AGF_LISTA``) como respaldo.
+    URL: https://www.cmfchile.cl/institucional/mercados/consulta.php?mercado=V&Estado=VI&entidad=RGAGF
 
     Args:
-        filtro_nombre: Si se indica, retorna solo las AGF cuyo nombre contenga
-                       este texto (insensible a mayúsculas).
+        filtro_nombre: Si se indica, retorna solo las AGF cuyo nombre o RUT
+                       contenga este texto (insensible a mayúsculas).
 
     Returns:
-        Lista de dicts con claves: nombre, rut, estado, link_detalle.
+        Lista de dicts con claves: rut, entidad, link.
     """
     print("Obteniendo lista de AGF vigentes desde CMF…")
-    agfs: list[dict] = []
+    print(f"  URL: {CMF_AGF_LISTA}")
 
-    # --- Fuente primaria: portal principal (57 AGF) ---
     try:
-        html_portal = fetch(CMF_AGF_PORTAL)
-        agfs = _extraer_agfs_portal(html_portal, filtro_nombre)
-        if agfs:
-            print(
-                f"  [portal] {len(agfs)} AGF obtenidas desde {CMF_AGF_PORTAL}"
-            )
+        html = fetch(CMF_AGF_LISTA)
     except RuntimeError as exc:
-        print(
-            f"  ⚠️  No se pudo acceder al portal principal de AGF: {exc}",
-            file=sys.stderr,
-        )
+        print(f"  ❌  No se pudo obtener la lista de AGF: {exc}", file=sys.stderr)
+        return []
 
-    # --- Fuente de respaldo: portal institucional ---
+    agfs = _parse_tabla_rut_entidad(html)
+
     if not agfs:
         print(
-            "  ⚠️  Intentando fuente de respaldo (portal institucional)…",
+            "  ⚠️  No se encontraron entradas en la tabla R.U.T./Entidad.",
             file=sys.stderr,
         )
-        try:
-            html_inst = fetch(CMF_AGF_LISTA)
-            _, rows = _parse_tabla(html_inst)
+        return []
 
-            for row in rows:
-                nombre = _primer_valor(
-                    row, ("nombre", "razon", "denominacion", "sociedad")
-                )
-                rut = _primer_valor(row, ("rut", "run", "rut_sociedad"))
-                estado = _primer_valor(row, ("estado", "vigencia"))
-                href = _primer_href(row)
+    if filtro_nombre:
+        filtro_up = filtro_nombre.upper()
+        agfs = [
+            a for a in agfs
+            if filtro_up in a["entidad"].upper() or filtro_up in a["rut"].upper()
+        ]
 
-                if not nombre:
-                    continue
-                if filtro_nombre and filtro_nombre.upper() not in nombre.upper():
-                    continue
-
-                agfs.append({
-                    "nombre": nombre,
-                    "rut": rut,
-                    "estado": estado,
-                    "link_detalle": _absolute(href) if href else "",
-                })
-                print(f"  ✅  AGF: {nombre}")
-
-        except RuntimeError as exc:
-            print(
-                f"  ❌  No se pudo obtener la lista de AGF: {exc}",
-                file=sys.stderr,
-            )
-
-    # --- Tercer intento: búsqueda POST global ---
-    if not agfs and not filtro_nombre:
-        print(
-            "  ⚠️  Tabla vacía; intentando búsqueda alternativa…",
-            file=sys.stderr,
-        )
-        try:
-            html2 = fetch(
-                CMF_BUSQUEDA_GLOBAL,
-                post_data={"entidad": "RGAGF", "mercado": "V"},
-            )
-            _, rows2 = _parse_tabla(html2)
-            for row in rows2:
-                nombre = _primer_valor(row, ("nombre", "razon", "denominacion"))
-                rut = _primer_valor(row, ("rut", "run"))
-                estado = _primer_valor(row, ("estado", "vigencia"))
-                href = _primer_href(row)
-                if nombre:
-                    agfs.append({
-                        "nombre": nombre,
-                        "rut": rut,
-                        "estado": estado,
-                        "link_detalle": _absolute(href) if href else "",
-                    })
-        except RuntimeError:
-            pass
-
-    if agfs:
-        for a in agfs:
-            print(f"  ✅  AGF: {a['nombre']}")
+    for a in agfs:
+        print(f"  ✅  AGF: {a['entidad']} (RUT: {a['rut']})")
 
     print(f"\nTotal AGF encontradas: {len(agfs)}\n")
     return agfs
 
 
 # ---------------------------------------------------------------------------
-# Búsqueda de fondos por AGF
+# Obtención de la lista de fondos de una AGF
 # ---------------------------------------------------------------------------
 
 
-def _safe_get_detalle(href: str, delay: float = DELAY_ENTRE_REQUESTS) -> str:
-    """Obtiene el HTML de una página de detalle de fondo; retorna '' en error."""
-    if not href:
-        return ""
-    url = _absolute(href)
-    try:
-        time.sleep(delay)
-        return fetch(url)
-    except RuntimeError as exc:
-        print(f"    ⚠️  No se pudo obtener detalle ({url}): {exc}", file=sys.stderr)
-        return ""
-
-
-def buscar_fondos_mutuos_agf(
-    agf_nombre: str,
+def obtener_fondos_agf(
+    agf: dict,
     delay: float = DELAY_ENTRE_REQUESTS,
 ) -> list[dict]:
     """
-    Busca los Fondos Mutuos de la AGF indicada en el portal CMF.
-
-    Intenta primero el Registro de Reglamentos filtrado por administradora.
-    Si no retorna resultados, recurre al listado general y filtra localmente.
+    Navega a la página de la AGF, hace clic en "Fondos Administrados" y
+    extrae la lista de fondos de la tabla R.U.T. / Entidad.
 
     Args:
-        agf_nombre: Nombre de la AGF tal como aparece en el registro CMF.
-        delay:      Pausa entre peticiones HTTP (segundos).
+        agf:   Dict con claves: rut, entidad, link.
+        delay: Pausa entre peticiones HTTP (segundos).
 
     Returns:
-        Lista de dicts con los campos CAMPOS_CSV_FONDOS.
+        Lista de dicts con claves: rut, entidad, link.
     """
-    fondos: list[dict] = []
-    agf_upper = agf_nombre.upper()
-
-    # Estrategia 1: Registro de reglamentos filtrado por administradora
-    html_reg = ""
-    try:
-        html_reg = fetch(
-            CMF_FM_REGLAMENTOS,
-            post_data={"administradora": agf_nombre, "boton_buscar": "Buscar"},
+    agf_url = agf["link"]
+    if not agf_url:
+        print(
+            f"    ⚠️  Sin link para AGF {agf['entidad']}; se omite.",
+            file=sys.stderr,
         )
+        return []
+
+    # 1. Obtener página principal de la AGF
+    try:
         time.sleep(delay)
+        html_agf = fetch(agf_url)
     except RuntimeError as exc:
         print(
-            f"    ⚠️  No se pudo usar registro de reglamentos FM para {agf_nombre}: {exc}",
+            f"    ⚠️  No se pudo obtener página de AGF ({agf_url}): {exc}",
             file=sys.stderr,
         )
+        return []
 
-    # Estrategia 2: Listado general
-    html_lista = ""
+    # 2. Determinar URL de "Fondos Administrados"
+    fondos_url = _url_fondos_administrados(html_agf, agf_url)
+    if not fondos_url:
+        print(
+            f"    ⚠️  No se encontró enlace 'Fondos Administrados' para {agf['entidad']}.",
+            file=sys.stderr,
+        )
+        return []
+
+    # 3. Obtener página de fondos administrados
     try:
-        html_lista = fetch(CMF_FM_BUSQUEDA)
         time.sleep(delay)
+        html_fondos = fetch(fondos_url)
     except RuntimeError as exc:
         print(
-            f"    ❌  Error al buscar fondos mutuos para {agf_nombre}: {exc}",
+            f"    ⚠️  No se pudo obtener fondos de AGF ({fondos_url}): {exc}",
             file=sys.stderr,
         )
+        return []
 
-    html = (
-        html_reg
-        if html_reg and agf_upper in html_reg.upper()
-        else html_lista
-    )
-    if not html:
-        return fondos
-
-    try:
-        _, rows = _parse_tabla(html)
-
-        for row in rows:
-            texto_fila = " ".join(str(v) for v in row.values()).upper()
-            if agf_upper not in texto_fila:
-                continue
-
-            nombre = _primer_valor(row, ("nombre", "fondo", "denominacion"))
-            codigo = _primer_valor(row, ("codigo", "run", "rut", "cod"))
-            estado = _primer_valor(row, ("estado", "vigencia"))
-            moneda = _primer_valor(row, ("moneda", "currency"))
-            series = _primer_valor(row, ("series", "serie", "n_series"))
-            agf = _primer_valor(row, ("administradora", "agf", "admin"))
-            detalle_href = _primer_href(row)
-
-            detalle_html = _safe_get_detalle(detalle_href, delay)
-            link_reg = extraer_link_reglamento(detalle_html) if detalle_html else ""
-            fecha_reg = _extraer_fecha_reglamento(detalle_html)
-
-            fondos.append({
-                "tipo": "FM",
-                "codigo": codigo,
-                "nombre": nombre,
-                "administrador": agf or agf_nombre,
-                "series": series,
-                "moneda": moneda,
-                "estado": estado,
-                "fecha_reglamento": fecha_reg,
-                "link_reglamento": link_reg,
-                "archivo_pdf": "",
-                "link_detalle_cmf": _absolute(detalle_href) if detalle_href else "",
-            })
-            print(f"    FM: {nombre}")
-            time.sleep(delay)
-
-    except (RuntimeError, KeyError, IndexError, ValueError) as exc:
-        print(
-            f"    ❌  Error al procesar fondos mutuos de {agf_nombre}: {exc}",
-            file=sys.stderr,
-        )
-
-    return fondos
-
-
-def buscar_fondos_inversion_agf(
-    agf_nombre: str,
-    delay: float = DELAY_ENTRE_REQUESTS,
-) -> list[dict]:
-    """
-    Busca los Fondos de Inversión de la AGF indicada en el portal CMF.
-
-    Args:
-        agf_nombre: Nombre de la AGF tal como aparece en el registro CMF.
-        delay:      Pausa entre peticiones HTTP (segundos).
-
-    Returns:
-        Lista de dicts con los campos CAMPOS_CSV_FONDOS.
-    """
-    fondos: list[dict] = []
-    agf_upper = agf_nombre.upper()
-
-    # Estrategia 1: Registro de reglamentos filtrado por administradora
-    html_reg = ""
-    try:
-        html_reg = fetch(
-            CMF_FI_REGLAMENTOS,
-            post_data={"administradora": agf_nombre, "boton_buscar": "Buscar"},
-        )
-        time.sleep(delay)
-    except RuntimeError as exc:
-        print(
-            f"    ⚠️  No se pudo usar registro de reglamentos FI para {agf_nombre}: {exc}",
-            file=sys.stderr,
-        )
-
-    # Estrategia 2: Listado general
-    html_lista = ""
-    try:
-        html_lista = fetch(CMF_FI_BUSQUEDA)
-        time.sleep(delay)
-    except RuntimeError as exc:
-        print(
-            f"    ❌  Error al buscar fondos de inversión para {agf_nombre}: {exc}",
-            file=sys.stderr,
-        )
-
-    html = (
-        html_reg
-        if html_reg and agf_upper in html_reg.upper()
-        else html_lista
-    )
-    if not html:
-        return fondos
-
-    try:
-        _, rows = _parse_tabla(html)
-
-        for row in rows:
-            texto_fila = " ".join(str(v) for v in row.values()).upper()
-            if agf_upper not in texto_fila:
-                continue
-
-            nombre = _primer_valor(row, ("nombre", "fondo", "denominacion"))
-            codigo = _primer_valor(row, ("codigo", "run", "rut", "cod"))
-            estado = _primer_valor(row, ("estado", "vigencia"))
-            moneda = _primer_valor(row, ("moneda", "currency"))
-            series = _primer_valor(row, ("cuotas", "series", "serie"))
-            agf = _primer_valor(row, ("administradora", "agf", "admin"))
-            detalle_href = _primer_href(row)
-
-            detalle_html = _safe_get_detalle(detalle_href, delay)
-            link_reg = extraer_link_reglamento(detalle_html) if detalle_html else ""
-            fecha_reg = _extraer_fecha_reglamento(detalle_html)
-
-            fondos.append({
-                "tipo": "FI",
-                "codigo": codigo,
-                "nombre": nombre,
-                "administrador": agf or agf_nombre,
-                "series": series,
-                "moneda": moneda,
-                "estado": estado,
-                "fecha_reglamento": fecha_reg,
-                "link_reglamento": link_reg,
-                "archivo_pdf": "",
-                "link_detalle_cmf": _absolute(detalle_href) if detalle_href else "",
-            })
-            print(f"    FI: {nombre}")
-            time.sleep(delay)
-
-    except (RuntimeError, KeyError, IndexError, ValueError) as exc:
-        print(
-            f"    ❌  Error al procesar fondos de inversión de {agf_nombre}: {exc}",
-            file=sys.stderr,
-        )
-
+    # 4. Parsear tabla R.U.T. / Entidad
+    fondos = _parse_tabla_rut_entidad(html_fondos)
     return fondos
 
 
 # ---------------------------------------------------------------------------
-# Descarga de PDFs
+# Procesamiento de un Fondo
 # ---------------------------------------------------------------------------
 
 
-def nombre_archivo_pdf(fondo: dict) -> str:
-    """Genera un nombre de archivo seguro para el PDF del reglamento del fondo."""
-    nombre = _sanitizar_nombre_pdf(fondo.get("nombre", "sin_nombre"))
-    tipo = fondo["tipo"].lower()
-    codigo = re.sub(r"\W", "", fondo.get("codigo", ""))
-    if codigo:
-        return f"ri_{tipo}_{codigo}_{nombre}.pdf"
-    return f"ri_{tipo}_{nombre}.pdf"
-
-
-def descargar_pdfs_agf(fondos: list[dict], pdfs_dir: Path) -> list[dict]:
+def procesar_fondo(
+    fondo: dict,
+    rut_agf: str,
+    pdfs_dir: Path,
+    delay: float = DELAY_ENTRE_REQUESTS,
+    solo_indice: bool = False,
+) -> dict:
     """
-    Descarga los PDFs de reglamentos internos en la carpeta indicada.
+    Para un fondo dado:
+      1. Navega a la página del fondo.
+      2. Hace clic en "reglamento interno".
+      3. Descarga los dos archivos de la primera tabla con id="Tabla".
 
-    Actualiza el campo ``archivo_pdf`` de cada fondo con el nombre del archivo
-    descargado.
+    Los archivos se nombran:
+      <original>_<rut_agf>_<rut_fondo>_Reg_Interno.<ext>
+      <original>_<rut_agf>_<rut_fondo>_modif.<ext>
 
     Returns:
-        La misma lista de fondos con el campo ``archivo_pdf`` actualizado.
+        Dict con info del fondo y estado de la descarga.
     """
-    pdfs_dir.mkdir(parents=True, exist_ok=True)
-    con_link = [f for f in fondos if f.get("link_reglamento")]
-    sin_link = len(fondos) - len(con_link)
+    fondo_url = fondo["link"]
+    rut_fondo = fondo["rut"] or _extraer_rut_de_url(fondo_url)
+    nombre_fondo = fondo["entidad"]
 
-    if not con_link:
-        return fondos
+    resultado: dict = {
+        "rut_fondo": rut_fondo,
+        "nombre_fondo": nombre_fondo,
+        "link_fondo": fondo_url,
+        "link_reglamento": "",
+        "archivo_reg_interno": "",
+        "archivo_modif": "",
+        "estado": "ok",
+    }
 
-    print(f"  Descargando PDFs ({len(con_link)} con link, {sin_link} sin link)…")
+    if not fondo_url:
+        resultado["estado"] = "sin_link"
+        return resultado
 
-    for fondo in fondos:
-        url = fondo.get("link_reglamento", "")
-        if not url:
-            continue
-        nombre_pdf = nombre_archivo_pdf(fondo)
+    # 1. Obtener página del fondo
+    try:
+        time.sleep(delay)
+        html_fondo = fetch(fondo_url)
+    except RuntimeError as exc:
+        print(
+            f"      ⚠️  No se pudo obtener página del fondo ({fondo_url}): {exc}",
+            file=sys.stderr,
+        )
+        resultado["estado"] = "error_fondo"
+        return resultado
+
+    # 2. Determinar URL de "reglamento interno"
+    reglamento_url = _url_reglamento_interno(html_fondo, fondo_url)
+    if not reglamento_url:
+        print(
+            f"      ⚠️  No se encontró 'reglamento interno' para {nombre_fondo}.",
+            file=sys.stderr,
+        )
+        resultado["estado"] = "sin_reglamento"
+        return resultado
+
+    resultado["link_reglamento"] = reglamento_url
+
+    if solo_indice:
+        return resultado
+
+    # 3. Obtener página de reglamento interno
+    try:
+        time.sleep(delay)
+        html_reglamento = fetch(reglamento_url)
+    except RuntimeError as exc:
+        print(
+            f"      ⚠️  No se pudo obtener reglamento ({reglamento_url}): {exc}",
+            file=sys.stderr,
+        )
+        resultado["estado"] = "error_reglamento"
+        return resultado
+
+    # 4. Extraer links de la PRIMERA tabla con id="Tabla"
+    links_descarga = _extraer_links_primera_tabla(html_reglamento)
+
+    if not links_descarga:
+        print(
+            f"      ⚠️  No se encontraron links en la tabla id=Tabla para {nombre_fondo}.",
+            file=sys.stderr,
+        )
+        resultado["estado"] = "sin_descarga"
+        return resultado
+
+    # 5. Descargar archivos
+    #    Primer link  → "Reg Interno"
+    #    Segundo link → "modif"
+    sufijos = ["Reg_Interno", "modif"]
+    campos = ["archivo_reg_interno", "archivo_modif"]
+
+    descargas_ok = 0
+    for i, (texto_link, href_link) in enumerate(links_descarga[:2]):
+        sufijo = sufijos[i]
+        url_descarga = _absolute(href_link)
+        nombre_pdf = _nombre_archivo_descarga(url_descarga, rut_agf, rut_fondo, sufijo)
         dest = pdfs_dir / nombre_pdf
-        ok = download_pdf(url, dest)
-        if ok:
-            fondo["archivo_pdf"] = nombre_pdf
-        time.sleep(DELAY_ENTRE_REQUESTS)
 
-    return fondos
+        ok = download_file(url_descarga, dest)
+        if ok:
+            resultado[campos[i]] = nombre_pdf
+            descargas_ok += 1
+        time.sleep(delay)
+
+    n_links = min(len(links_descarga), 2)
+    if descargas_ok == 0:
+        resultado["estado"] = "descarga_fallida"
+    elif descargas_ok < n_links:
+        resultado["estado"] = "descarga_parcial"
+
+    return resultado
+
+
+# ---------------------------------------------------------------------------
+# Procesamiento de una AGF
+# ---------------------------------------------------------------------------
+
+
+def procesar_agf(
+    agf: dict,
+    solo_indice: bool,
+    delay: float,
+) -> dict:
+    """
+    Procesa una AGF: obtiene su lista de fondos y descarga los reglamentos.
+
+    Args:
+        agf:         Dict con claves: rut, entidad, link.
+        solo_indice: Si True, no descarga archivos (solo genera índices CSV/MD).
+        delay:       Pausa entre peticiones HTTP (segundos).
+
+    Returns:
+        Dict resumen de la AGF con estadísticas.
+    """
+    nombre = agf["entidad"]
+    rut_agf = agf["rut"]
+
+    carpeta_nombre = _sanitizar_nombre_carpeta(nombre)
+    agf_dir = BASE_DIR / carpeta_nombre
+
+    print(f"\n{'=' * 70}")
+    print(f"  AGF: {nombre}  (RUT: {rut_agf})")
+    print(f"  Carpeta: {agf_dir}")
+    print(f"{'=' * 70}")
+
+    agf_dir.mkdir(parents=True, exist_ok=True)
+
+    # Obtener lista de fondos navigando AGF → Fondos Administrados
+    fondos_lista = obtener_fondos_agf(agf, delay)
+    print(f"  → {len(fondos_lista)} fondo(s) encontrado(s)")
+
+    fondos_procesados: list[dict] = []
+    pdfs_dir = agf_dir / "pdfs"
+
+    for fondo in fondos_lista:
+        print(f"    Fondo: {fondo['entidad']}  (RUT: {fondo['rut']})")
+        resultado = procesar_fondo(fondo, rut_agf, pdfs_dir, delay, solo_indice)
+        fondos_procesados.append(resultado)
+
+    # Generar índices CSV y Markdown por AGF
+    csv_ruta = agf_dir / "fondos.csv"
+    md_ruta = agf_dir / "fondos.md"
+
+    escribir_csv_fondos(fondos_procesados, csv_ruta)
+    escribir_md_fondos(fondos_procesados, nombre, rut_agf, md_ruta)
+
+    print(f"  📄  CSV: {csv_ruta}")
+    print(f"  📄  MD:  {md_ruta}")
+
+    con_reg = sum(1 for f in fondos_procesados if f.get("archivo_reg_interno"))
+
+    return {
+        "nombre_agf": nombre,
+        "rut": rut_agf,
+        "carpeta": carpeta_nombre,
+        "total_fondos": len(fondos_lista),
+        "con_reglamento": con_reg,
+        "link_cmf": agf.get("link", ""),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -914,64 +852,52 @@ def escribir_csv_fondos(fondos: list[dict], ruta: Path) -> None:
             writer.writerow({k: fondo.get(k, "") for k in CAMPOS_CSV_FONDOS})
 
 
-def escribir_md_fondos(fondos: list[dict], agf_nombre: str, ruta: Path) -> None:
+def escribir_md_fondos(
+    fondos: list[dict],
+    nombre_agf: str,
+    rut_agf: str,
+    ruta: Path,
+) -> None:
     """Escribe el índice de fondos de una AGF en formato Markdown."""
     ahora = datetime.now().strftime(TIMESTAMP_FORMAT)
-    fm = [f for f in fondos if f["tipo"] == "FM"]
-    fi = [f for f in fondos if f["tipo"] == "FI"]
-
     lineas: list[str] = [
-        f"# Reglamentos Internos – {agf_nombre}",
+        f"# Reglamentos Internos – {nombre_agf}",
         "",
+        f"> RUT AGF: **{rut_agf}**  ",
         f"> Generado el {ahora}  ",
         f"> Fuente: [CMF – Portal Institucional]({CMF_BASE})",
         "",
-        f"Total de fondos encontrados: **{len(fondos)}**"
-        f" ({len(fm)} Fondos Mutuos · {len(fi)} Fondos de Inversión)",
+        f"Total de fondos encontrados: **{len(fondos)}**",
         "",
+        "| RUT Fondo | Nombre | Reglamento Interno | Modif en trámite | Estado |",
+        "|-----------|--------|--------------------|------------------|--------|",
     ]
-
-    for titulo, lista in (
-        ("Fondos Mutuos (FM)", fm),
-        ("Fondos de Inversión (FI)", fi),
-    ):
-        if not lista:
-            continue
-        lineas += [
-            f"## {titulo}",
-            "",
-            "| Código | Nombre | Estado | Moneda | Fecha Reglamento | Reglamento Interno | Detalle CMF |",
-            "|--------|--------|--------|--------|------------------|--------------------|-------------|",
-        ]
-        for f in lista:
-            link_reg = (
-                f"[PDF ↗]({f['link_reglamento']})" if f.get("link_reglamento") else "–"
-            )
-            link_det = (
-                f"[CMF ↗]({f['link_detalle_cmf']})" if f.get("link_detalle_cmf") else "–"
-            )
-            lineas.append(
-                f"| {f.get('codigo', '')} "
-                f"| {f.get('nombre', '')} "
-                f"| {f.get('estado', '')} "
-                f"| {f.get('moneda', '')} "
-                f"| {f.get('fecha_reglamento', '')} "
-                f"| {link_reg} "
-                f"| {link_det} |"
-            )
-        lineas.append("")
-
+    for f in fondos:
+        link_reg = (
+            f"[Reglamento ↗]({f['link_reglamento']})"
+            if f.get("link_reglamento")
+            else "–"
+        )
+        arch_reg = f.get("archivo_reg_interno", "") or "–"
+        arch_mod = f.get("archivo_modif", "") or "–"
+        lineas.append(
+            f"| {f.get('rut_fondo', '')} "
+            f"| {f.get('nombre_fondo', '')} "
+            f"| {arch_reg} "
+            f"| {arch_mod} "
+            f"| {f.get('estado', '')} |"
+        )
     lineas += [
+        "",
         "---",
         "",
         "## Referencias normativas",
         "",
-        "- [NCG N° 365](../../normativa/ncg/ncg_365.md) – Información sobre reglamentos internos de fondos",
+        "- [NCG N° 365](../../normativa/ncg/ncg_365.md) – Reglamentos internos de fondos",
         "- [Ley N° 20.712](../../normativa/leyes/ley_20712.md) – Ley Única de Fondos",
         f"- [Portal CMF]({CMF_BASE})",
         "",
     ]
-
     ruta.write_text("\n".join(lineas), encoding="utf-8")
 
 
@@ -1012,23 +938,17 @@ def escribir_md_agf(resumen: list[dict], ruta: Path) -> None:
         "",
         "## Listado de AGF",
         "",
-        "| AGF | RUT | Estado | Fondos | FM | FI | Con Reglamento | Carpeta |",
-        "|-----|-----|--------|--------|----|----|----------------|---------|",
+        "| AGF | RUT | Fondos | Con Reglamento | Carpeta |",
+        "|-----|-----|--------|----------------|---------|",
     ]
 
     for agf in sorted(resumen, key=lambda x: x.get("nombre_agf", "")):
         carpeta = agf.get("carpeta", "")
         link_carpeta = f"[{carpeta}](./{carpeta}/fondos.md)" if carpeta else "–"
-        link_cmf = (
-            f"[CMF ↗]({agf['link_cmf']})" if agf.get("link_cmf") else "–"
-        )
         lineas.append(
             f"| {agf.get('nombre_agf', '')} "
             f"| {agf.get('rut', '')} "
-            f"| {agf.get('estado', '')} "
             f"| {agf.get('total_fondos', 0)} "
-            f"| {agf.get('fondos_mutuos', 0)} "
-            f"| {agf.get('fondos_inversion', 0)} "
             f"| {agf.get('con_reglamento', 0)} "
             f"| {link_carpeta} |"
         )
@@ -1040,10 +960,10 @@ def escribir_md_agf(resumen: list[dict], ruta: Path) -> None:
         "## Cómo actualizar este índice",
         "",
         "```bash",
-        "# Regenerar todos los índices y volver a descargar los PDFs",
+        "# Regenerar todos los índices y descargar los archivos",
         "python descargar_todos_reglamentos.py",
         "",
-        "# Solo regenerar los índices (sin descargar PDFs)",
+        "# Solo regenerar los índices (sin descargar archivos)",
         "python descargar_todos_reglamentos.py --solo-indice",
         "",
         "# Solo una AGF específica",
@@ -1052,90 +972,13 @@ def escribir_md_agf(resumen: list[dict], ruta: Path) -> None:
         "",
         "## Referencias normativas",
         "",
-        "- [NCG N° 365](../normativa/ncg/ncg_365.md) – Información sobre reglamentos internos de fondos",
+        "- [NCG N° 365](../normativa/ncg/ncg_365.md) – Reglamentos internos de fondos",
         "- [Ley N° 20.712](../normativa/leyes/ley_20712.md) – Ley Única de Fondos",
-        f"- [Portal CMF – Lista de AGF]({CMF_AGF_PORTAL})",
+        f"- [Portal CMF – Lista de AGF]({CMF_AGF_LISTA})",
         "",
     ]
 
     ruta.write_text("\n".join(lineas), encoding="utf-8")
-
-
-# ---------------------------------------------------------------------------
-# Procesamiento de una AGF
-# ---------------------------------------------------------------------------
-
-
-def procesar_agf(
-    agf: dict,
-    tipos: list[str],
-    solo_indice: bool,
-    delay: float,
-) -> dict:
-    """
-    Procesa una AGF: busca sus fondos, descarga PDFs y genera índices.
-
-    Args:
-        agf:         Dict con keys: nombre, rut, estado, link_detalle.
-        tipos:       Lista de tipos a procesar, e.g. ["FM", "FI"].
-        solo_indice: Si True, no descarga PDFs.
-        delay:       Pausa entre peticiones HTTP.
-
-    Returns:
-        Dict resumen de la AGF con estadísticas.
-    """
-    nombre = agf["nombre"]
-    carpeta_nombre = _sanitizar_nombre_carpeta(nombre)
-    agf_dir = BASE_DIR / carpeta_nombre
-
-    print(f"\n{'='*70}")
-    print(f"  AGF: {nombre}")
-    print(f"  Carpeta: {agf_dir}")
-    print(f"{'='*70}")
-
-    agf_dir.mkdir(parents=True, exist_ok=True)
-
-    fondos: list[dict] = []
-
-    if "FM" in tipos:
-        fm = buscar_fondos_mutuos_agf(nombre, delay)
-        fondos.extend(fm)
-        print(f"  → {len(fm)} Fondos Mutuos encontrados para {nombre}")
-
-    if "FI" in tipos:
-        fi = buscar_fondos_inversion_agf(nombre, delay)
-        fondos.extend(fi)
-        print(f"  → {len(fi)} Fondos de Inversión encontrados para {nombre}")
-
-    if fondos and not solo_indice:
-        pdfs_dir = agf_dir / "pdfs"
-        fondos = descargar_pdfs_agf(fondos, pdfs_dir)
-
-    # Escribir índice por AGF
-    csv_ruta = agf_dir / "fondos.csv"
-    md_ruta = agf_dir / "fondos.md"
-
-    escribir_csv_fondos(fondos, csv_ruta)
-    escribir_md_fondos(fondos, nombre, md_ruta)
-
-    print(f"  📄  CSV generado: {csv_ruta}")
-    print(f"  📄  MD generado:  {md_ruta}")
-
-    fm_count = sum(1 for f in fondos if f["tipo"] == "FM")
-    fi_count = sum(1 for f in fondos if f["tipo"] == "FI")
-    con_reg = sum(1 for f in fondos if f.get("link_reglamento"))
-
-    return {
-        "nombre_agf": nombre,
-        "rut": agf.get("rut", ""),
-        "estado": agf.get("estado", ""),
-        "carpeta": carpeta_nombre,
-        "total_fondos": len(fondos),
-        "fondos_mutuos": fm_count,
-        "fondos_inversion": fi_count,
-        "con_reglamento": con_reg,
-        "link_cmf": agf.get("link_detalle", ""),
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -1146,33 +989,25 @@ def procesar_agf(
 def construir_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Descarga reglamentos internos de fondos de TODAS las AGF inscritas en la CMF."
+            "Descarga reglamentos internos de fondos de TODAS las AGF "
+            "inscritas en la CMF de Chile, navegando el flujo correcto del portal."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
     parser.add_argument(
         "--agf",
-        metavar="NOMBRE",
+        metavar="TEXTO",
         default="",
         help=(
-            "Filtrar por nombre de AGF (búsqueda parcial, insensible a mayúsculas). "
-            'Ejemplo: --agf "BICE" procesará solo las AGF cuyo nombre contenga "BICE".'
-        ),
-    )
-    parser.add_argument(
-        "--tipo",
-        choices=["FM", "FI"],
-        metavar="{FM,FI}",
-        help=(
-            "Limitar la búsqueda a un tipo de fondo: "
-            "FM (Fondos Mutuos) o FI (Fondos de Inversión)."
+            "Filtrar por nombre o RUT de AGF (búsqueda parcial, insensible a "
+            'mayúsculas). Ejemplo: --agf "BICE".'
         ),
     )
     parser.add_argument(
         "--solo-indice",
         action="store_true",
-        help="Generar los índices CSV/MD sin descargar los PDFs.",
+        help="Generar los índices CSV/MD sin descargar los archivos.",
     )
     parser.add_argument(
         "--delay",
@@ -1182,7 +1017,7 @@ def construir_arg_parser() -> argparse.ArgumentParser:
         help=(
             f"Pausa en segundos entre peticiones HTTP "
             f"(por defecto: {DELAY_ENTRE_REQUESTS}). "
-            "Aumentar este valor si el portal CMF rechaza las peticiones."
+            "Aumentar si el portal CMF rechaza las peticiones."
         ),
     )
     return parser
@@ -1190,21 +1025,18 @@ def construir_arg_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = construir_arg_parser().parse_args()
-
-    tipos = ["FM", "FI"] if args.tipo is None else [args.tipo]
     delay = max(0.5, args.delay)
 
-    # 1. Obtener lista de AGF
+    # 1. Obtener lista de AGF desde la ruta inicial
     agfs = obtener_lista_agfs(filtro_nombre=args.agf)
 
     if not agfs:
         print(
             "\n⚠️  No se encontraron AGF en el portal CMF.\n"
             "   Posibles causas:\n"
-            "   • Sin acceso a internet o portal CMF temporalmente no disponible.\n"
-            f"     URL primaria  : {CMF_AGF_PORTAL}\n"
-            f"     URL de respaldo: {CMF_AGF_LISTA}\n"
-            "   • El portal CMF puede haber actualizado su estructura de URLs.\n",
+            "   • Sin acceso a internet o portal temporalmente no disponible.\n"
+            f"   • URL: {CMF_AGF_LISTA}\n"
+            "   • El portal CMF puede haber actualizado su estructura HTML.\n",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -1214,24 +1046,23 @@ def main() -> None:
 
     for agf in agfs:
         try:
-            stats = procesar_agf(agf, tipos, args.solo_indice, delay)
+            stats = procesar_agf(agf, args.solo_indice, delay)
             resumen.append(stats)
         except (RuntimeError, OSError, KeyError, ValueError) as exc:
             print(
-                f"\n  ❌  Error al procesar AGF '{agf['nombre']}': {exc}",
+                f"\n  ❌  Error al procesar AGF '{agf['entidad']}': {exc}",
                 file=sys.stderr,
             )
-            resumen.append({
-                "nombre_agf": agf["nombre"],
-                "rut": agf.get("rut", ""),
-                "estado": agf.get("estado", ""),
-                "carpeta": _sanitizar_nombre_carpeta(agf["nombre"]),
-                "total_fondos": 0,
-                "fondos_mutuos": 0,
-                "fondos_inversion": 0,
-                "con_reglamento": 0,
-                "link_cmf": agf.get("link_detalle", ""),
-            })
+            resumen.append(
+                {
+                    "nombre_agf": agf["entidad"],
+                    "rut": agf.get("rut", ""),
+                    "carpeta": _sanitizar_nombre_carpeta(agf["entidad"]),
+                    "total_fondos": 0,
+                    "con_reglamento": 0,
+                    "link_cmf": agf.get("link", ""),
+                }
+            )
 
     # 3. Escribir índice global
     csv_global = BASE_DIR / "indice_agf.csv"
@@ -1244,14 +1075,14 @@ def main() -> None:
     print(f"📄  Índice global MD:  {md_global}")
 
     total_fondos = sum(r.get("total_fondos", 0) for r in resumen)
-    total_pdfs = sum(r.get("con_reglamento", 0) for r in resumen)
+    total_con_reg = sum(r.get("con_reglamento", 0) for r in resumen)
 
     print(f"\n✅  Proceso finalizado.")
-    print(f"   AGF procesadas: {len(resumen)}")
-    print(f"   Fondos encontrados: {total_fondos}")
-    print(f"   Con reglamento disponible: {total_pdfs}")
+    print(f"   AGF procesadas      : {len(resumen)}")
+    print(f"   Fondos encontrados  : {total_fondos}")
+    print(f"   Con reglamento      : {total_con_reg}")
     if not args.solo_indice:
-        print(f"   PDFs descargados en subcarpetas de: {BASE_DIR}/")
+        print(f"   Archivos en         : {BASE_DIR}/<CARPETA_AGF>/pdfs/")
 
 
 if __name__ == "__main__":

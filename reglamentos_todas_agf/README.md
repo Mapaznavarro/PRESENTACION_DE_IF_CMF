@@ -8,17 +8,43 @@ Comisión para el Mercado Financiero (CMF) de Chile.
 
 | Archivo / Carpeta | Descripción |
 |-------------------|-------------|
-| `descargar_todos_reglamentos.py` | Script Python que consulta el portal CMF, genera los índices y descarga los PDFs para todas las AGF |
+| `descargar_todos_reglamentos.py` | Script Python que navega el portal CMF, genera los índices y descarga los archivos para todas las AGF |
 | `indice_agf.csv` | Resumen global de todas las AGF procesadas (generado por el script) |
 | `indice_agf.md` | Versión Markdown del resumen global (generado por el script) |
 | `<NOMBRE_AGF>/` | Subcarpeta por cada AGF (generada por el script) |
-| `<NOMBRE_AGF>/fondos.csv` | Índice CSV de los fondos de esa AGF con links a los reglamentos |
+| `<NOMBRE_AGF>/fondos.csv` | Índice CSV de los fondos de esa AGF con estado de descarga |
 | `<NOMBRE_AGF>/fondos.md` | Versión Markdown del índice de fondos |
-| `<NOMBRE_AGF>/pdfs/` | PDFs de los reglamentos internos descargados |
+| `<NOMBRE_AGF>/pdfs/` | Archivos descargados (reglamento interno + modificaciones en trámite) |
 
 > `indice_agf.csv`, `indice_agf.md` y todas las subcarpetas de AGF son
 > generados automáticamente por el script.
 > Ejecuta el script para obtener los datos actualizados desde el portal CMF.
+
+---
+
+## Flujo de navegación
+
+El script sigue el flujo exacto del portal CMF:
+
+```
+Ruta Inicial
+  └─ https://www.cmfchile.cl/institucional/mercados/consulta.php?mercado=V&Estado=VI&entidad=RGAGF
+       │  Tabla R.U.T. / Entidad → link del RUT de cada AGF
+       ▼
+  Página de la AGF  (pestania=1)
+       │  Clic en botón "Fondos Administrados"  (pestania=39)
+       ▼
+  Lista de Fondos Administrados
+       │  Tabla R.U.T. / Entidad → link del RUT de cada Fondo
+       ▼
+  Página del Fondo  (pestania=1)
+       │  Clic en botón "reglamento interno"  (pestania=56)
+       ▼
+  Página de Reglamento Interno
+       │  Primera tabla con id="Tabla"
+       │    Primer link  "Descarga" → <original>_<rut_agf>_<rut_fondo>_Reg_Interno.<ext>
+       └─   Segundo link "Descarga" → <original>_<rut_agf>_<rut_fondo>_modif.<ext>
+```
 
 ---
 
@@ -34,34 +60,19 @@ El script solo requiere **Python 3.10 o superior** y no tiene dependencias exter
 # Desde la raíz del repositorio:
 cd reglamentos_todas_agf
 
-# Descargar reglamentos de TODAS las AGF (índices + PDFs):
+# Descargar reglamentos de TODAS las AGF (índices + archivos):
 python descargar_todos_reglamentos.py
 
-# Solo generar los índices (sin descargar PDFs):
+# Solo generar los índices (sin descargar archivos):
 python descargar_todos_reglamentos.py --solo-indice
 
 # Solo una AGF específica (búsqueda parcial, insensible a mayúsculas):
 python descargar_todos_reglamentos.py --agf "LARRAIN VIAL"
 python descargar_todos_reglamentos.py --agf "BICE"
 
-# Solo Fondos Mutuos de todas las AGF:
-python descargar_todos_reglamentos.py --tipo FM
-
-# Solo Fondos de Inversión de todas las AGF:
-python descargar_todos_reglamentos.py --tipo FI
-
 # Aumentar la pausa entre peticiones (útil si el portal rechaza peticiones):
 python descargar_todos_reglamentos.py --delay 2.0
 ```
-
-El script:
-1. Consulta `https://www.cmfchile.cl/portal/principal/613/w3-propertyvalue-18572.html` para obtener el listado completo de las 57 AGF vigentes (fuente primaria). Si esa URL no está disponible, recurre a `https://www.cmfchile.cl/institucional/mercados/consulta.php?mercado=V&Estado=VI&entidad=RGAGF` como respaldo.
-2. Por cada AGF, crea una subcarpeta con su nombre sanitizado.
-3. Busca todos los fondos de esa AGF en los registros de Fondos Mutuos y Fondos de Inversión de la CMF.
-4. Accede a la página de detalle de cada fondo para extraer el link al reglamento interno.
-5. Descarga los PDFs en la subcarpeta `pdfs/` de cada AGF.
-6. Genera `fondos.csv` y `fondos.md` con el índice de fondos de cada AGF.
-7. Genera `indice_agf.csv` y `indice_agf.md` con el resumen global de todas las AGF.
 
 ### 3. Estructura generada tras ejecutar el script
 
@@ -75,8 +86,8 @@ reglamentos_todas_agf/
 │   ├── fondos.csv
 │   ├── fondos.md
 │   └── pdfs/
-│       ├── ri_fm_FMXXX_bci_liquidez_pesos.pdf
-│       └── ri_fi_FIXXX_bci_renta_mixta.pdf
+│       ├── 20240101_96639280_10000_Reg_Interno.pdf   ← reglamento vigente
+│       └── 20240101_96639280_10000_modif.pdf          ← modificaciones en trámite
 ├── LARRAINVIAL_AGF_SA/
 │   ├── fondos.csv
 │   ├── fondos.md
@@ -95,11 +106,8 @@ Una vez ejecutado el script, el archivo `indice_agf.md` contiene una tabla con:
 |-------|-------------|
 | AGF | Nombre de la administradora |
 | RUT | RUT de la sociedad administradora |
-| Estado | Estado de registro en CMF |
 | Fondos | Total de fondos encontrados |
-| FM | Cantidad de Fondos Mutuos |
-| FI | Cantidad de Fondos de Inversión |
-| Con Reglamento | Fondos con PDF de reglamento disponible |
+| Con Reglamento | Fondos con archivo de reglamento descargado |
 | Carpeta | Link a la subcarpeta con los índices de esa AGF |
 
 ---
@@ -110,13 +118,11 @@ Cada subcarpeta de AGF contiene un `fondos.md` con:
 
 | Campo | Descripción |
 |-------|-------------|
-| Código | Identificador del fondo en la CMF |
+| RUT Fondo | RUT del fondo |
 | Nombre | Denominación del fondo |
-| Estado | Estado de vigencia (vigente / en liquidación / etc.) |
-| Moneda | Moneda de denominación del fondo |
-| Fecha Reglamento | Fecha de depósito o última modificación |
-| Reglamento Interno | Link directo al PDF en el portal CMF |
-| Detalle CMF | Link a la ficha del fondo en el portal CMF |
+| Reglamento Interno | Nombre del archivo descargado (reglamento vigente) |
+| Modif en trámite | Nombre del archivo descargado (modificaciones en trámite) |
+| Estado | Estado del proceso (`ok`, `sin_reglamento`, `sin_descarga`, etc.) |
 
 ---
 
@@ -124,12 +130,7 @@ Cada subcarpeta de AGF contiene un `fondos.md` con:
 
 | Recurso | URL |
 |---------|-----|
-| **Listado de AGF vigentes (fuente primaria – 57 AGF)** | <https://www.cmfchile.cl/portal/principal/613/w3-propertyvalue-18572.html> |
-| Listado de AGF vigentes (fuente de respaldo) | <https://www.cmfchile.cl/institucional/mercados/consulta.php?mercado=V&Estado=VI&entidad=RGAGF> |
-| Listado de Fondos Mutuos | <https://www.cmfchile.cl/institucional/mercados/consulta.php?mercado=V&entidad=RGFMU> |
-| Listado de Fondos de Inversión | <https://www.cmfchile.cl/institucional/mercados/consulta.php?mercado=V&entidad=RGFI> |
-| Reglamentos Internos – FM | <https://www.cmfchile.cl/institucional/inc/deposito_fondos_mutuos.php> |
-| Reglamentos Internos – FI | <https://www.cmfchile.cl/institucional/inc/deposito_fondos_inversion.php> |
+| **Listado de AGF vigentes (ruta inicial)** | <https://www.cmfchile.cl/institucional/mercados/consulta.php?mercado=V&Estado=VI&entidad=RGAGF> |
 
 ---
 
