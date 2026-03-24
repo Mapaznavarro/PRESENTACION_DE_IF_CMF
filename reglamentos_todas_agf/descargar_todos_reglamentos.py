@@ -98,6 +98,29 @@ CAMPOS_CSV_AGF = [
     "link_cmf",
 ]
 
+# Estados de fondo que se consideran fallos de extracción
+ESTADOS_FALLO = {
+    "sin_link",
+    "error_fondo",
+    "sin_reglamento",
+    "error_reglamento",
+    "sin_descarga",
+    "descarga_fallida",
+    "descarga_parcial",
+    "error_fondos_agf",
+    "error_general",
+}
+
+CAMPOS_CSV_FALLOS = [
+    "nombre_agf",
+    "rut_agf",
+    "nombre_fondo",
+    "rut_fondo",
+    "estado",
+    "link_fondo",
+    "link_reglamento",
+]
+
 # ---------------------------------------------------------------------------
 # Helpers HTTP
 # ---------------------------------------------------------------------------
@@ -862,7 +885,7 @@ def procesar_agf(
     agf: dict,
     solo_indice: bool,
     delay: float,
-) -> dict:
+) -> tuple[dict, list[dict]]:
     """
     Procesa una AGF: obtiene su lista de fondos y descarga los reglamentos.
 
@@ -872,7 +895,9 @@ def procesar_agf(
         delay:       Pausa entre peticiones HTTP (segundos).
 
     Returns:
-        Dict resumen de la AGF con estadísticas.
+        Tupla (stats_dict, fallos_list) donde stats_dict es el resumen de la
+        AGF con estadísticas y fallos_list es la lista de fondos (y la propia
+        AGF cuando corresponde) para los que no se pudo extraer información.
     """
     nombre = agf["entidad"]
     rut_agf = agf["rut"]
@@ -887,9 +912,24 @@ def procesar_agf(
 
     agf_dir.mkdir(parents=True, exist_ok=True)
 
+    fallos: list[dict] = []
+
     # Obtener lista de fondos navigando AGF → Fondos Administrados
     fondos_lista = obtener_fondos_agf(agf, delay)
     print(f"  → {len(fondos_lista)} fondo(s) encontrado(s)")
+
+    if not fondos_lista:
+        fallos.append(
+            {
+                "nombre_agf": nombre,
+                "rut_agf": rut_agf,
+                "nombre_fondo": "",
+                "rut_fondo": "",
+                "estado": "error_fondos_agf",
+                "link_fondo": agf.get("link", ""),
+                "link_reglamento": "",
+            }
+        )
 
     fondos_procesados: list[dict] = []
     pdfs_dir = agf_dir / "pdfs"
@@ -898,6 +938,18 @@ def procesar_agf(
         print(f"    Fondo: {fondo['entidad']}  (RUT: {fondo['rut']})")
         resultado = procesar_fondo(fondo, rut_agf, pdfs_dir, delay, solo_indice)
         fondos_procesados.append(resultado)
+        if resultado.get("estado") in ESTADOS_FALLO:
+            fallos.append(
+                {
+                    "nombre_agf": nombre,
+                    "rut_agf": rut_agf,
+                    "nombre_fondo": resultado.get("nombre_fondo", ""),
+                    "rut_fondo": resultado.get("rut_fondo", ""),
+                    "estado": resultado.get("estado", ""),
+                    "link_fondo": resultado.get("link_fondo", ""),
+                    "link_reglamento": resultado.get("link_reglamento", ""),
+                }
+            )
 
     # Generar índices CSV y Markdown por AGF
     csv_ruta = agf_dir / "fondos.csv"
@@ -911,14 +963,17 @@ def procesar_agf(
 
     con_reg = sum(1 for f in fondos_procesados if f.get("archivo_reg_interno"))
 
-    return {
-        "nombre_agf": nombre,
-        "rut": rut_agf,
-        "carpeta": carpeta_nombre,
-        "total_fondos": len(fondos_lista),
-        "con_reglamento": con_reg,
-        "link_cmf": agf.get("link", ""),
-    }
+    return (
+        {
+            "nombre_agf": nombre,
+            "rut": rut_agf,
+            "carpeta": carpeta_nombre,
+            "total_fondos": len(fondos_lista),
+            "con_reglamento": con_reg,
+            "link_cmf": agf.get("link", ""),
+        },
+        fallos,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1069,6 +1124,25 @@ def escribir_md_agf(resumen: list[dict], ruta: Path) -> None:
     ruta.write_text("\n".join(lineas), encoding="utf-8")
 
 
+def escribir_csv_fallos(fallos: list[dict], ruta: Path) -> None:
+    """Escribe el archivo de fallos de extracción en formato CSV.
+
+    Cada fila representa un fondo (o una AGF entera) para el que no fue
+    posible extraer la información del portal CMF.
+    """
+    with ruta.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=CAMPOS_CSV_FALLOS,
+            extrasaction="ignore",
+            restval="",
+            quoting=csv.QUOTE_MINIMAL,
+        )
+        writer.writeheader()
+        for fallo in fallos:
+            writer.writerow(fallo)
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -1131,11 +1205,13 @@ def main() -> None:
 
     # 2. Procesar cada AGF
     resumen: list[dict] = []
+    all_fallos: list[dict] = []
 
     for agf in agfs:
         try:
-            stats = procesar_agf(agf, args.solo_indice, delay)
+            stats, fallos = procesar_agf(agf, args.solo_indice, delay)
             resumen.append(stats)
+            all_fallos.extend(fallos)
         except (RuntimeError, OSError, KeyError, ValueError) as exc:
             print(
                 f"\n  ❌  Error al procesar AGF '{agf['entidad']}': {exc}",
@@ -1151,6 +1227,17 @@ def main() -> None:
                     "link_cmf": agf.get("link", ""),
                 }
             )
+            all_fallos.append(
+                {
+                    "nombre_agf": agf["entidad"],
+                    "rut_agf": agf.get("rut", ""),
+                    "nombre_fondo": "",
+                    "rut_fondo": "",
+                    "estado": "error_general",
+                    "link_fondo": agf.get("link", ""),
+                    "link_reglamento": "",
+                }
+            )
 
     # 3. Escribir índice global
     csv_global = BASE_DIR / "indice_agf.csv"
@@ -1161,6 +1248,15 @@ def main() -> None:
 
     print(f"\n📄  Índice global CSV: {csv_global}")
     print(f"📄  Índice global MD:  {md_global}")
+
+    # 4. Escribir archivo de fallos de extracción
+    if all_fallos:
+        csv_fallos = BASE_DIR / "fallos_extraccion.csv"
+        escribir_csv_fallos(all_fallos, csv_fallos)
+        print(f"⚠️   Fallos de extracción : {len(all_fallos)}")
+        print(f"📄  Fallos CSV           : {csv_fallos}")
+    else:
+        print("✅  Sin fallos de extracción.")
 
     total_fondos = sum(r.get("total_fondos", 0) for r in resumen)
     total_con_reg = sum(r.get("con_reglamento", 0) for r in resumen)
