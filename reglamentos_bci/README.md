@@ -26,6 +26,26 @@ El script solo requiere **Python 3.10 o superior** y no tiene dependencias exter
 
 ### 2. Ejecutar el script
 
+Los pasos son idénticos a los de `descargar_normativa.sh`: ejecuta el script desde la raíz del repositorio.
+
+```bash
+# Desde la raíz del repositorio:
+
+# Buscar todos los fondos de BCI AM, generar el índice y descargar los PDFs:
+bash descargar_reglamentos_bci.sh
+
+# Solo generar el índice CSV/MD (sin descargar los PDFs):
+bash descargar_reglamentos_bci.sh --solo-indice
+
+# Solo Fondos Mutuos:
+bash descargar_reglamentos_bci.sh --tipo FM
+
+# Solo Fondos de Inversión:
+bash descargar_reglamentos_bci.sh --tipo FI
+```
+
+Si prefieres ejecutar el script Python directamente:
+
 ```bash
 # Desde la raíz del repositorio:
 cd reglamentos_bci
